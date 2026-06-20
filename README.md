@@ -78,15 +78,71 @@ Vào `/draw.html` → nhập tên giải → bấm **QUAY**. Hệ thống chỉ 
 - Ảnh + DB nằm trong thư mục `data/` (đã gitignore). **Xoá `data/` sau sự kiện** nếu không cần lưu.
 - Đổi `ADMIN_PASSWORD` và `CCCD_SALT` trước khi dùng thật.
 
+## 7. Deploy lên VPS bằng Docker (khuyến nghị)
+
+Đã có sẵn: `Dockerfile`, `docker-compose.yml`, `Caddyfile`. Caddy tự cấp **SSL/HTTPS** (Let's Encrypt) — bắt buộc để camera/GPS chạy.
+
+**Yêu cầu:** 1 VPS (Debian/Ubuntu) + 1 **domain** trỏ DNS về IP VPS.
+
+### Bước 1 — Cài Docker trên VPS (Debian/Ubuntu)
+```bash
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER   # đăng xuất/đăng nhập lại để áp dụng
+```
+
+### Bước 2 — Lấy code + cấu hình
+```bash
+git clone https://github.com/quytcn-commits/checkin.git
+cd checkin
+cp .env.example .env
+nano .env     # đổi: ADMIN_PASSWORD, CCCD_SALT, EVENT_NAME, DOMAIN=checkin.congty.com
+```
+
+### Bước 3 — Trỏ DNS + mở firewall
+- Tạo bản ghi **DNS A**: `checkin.congty.com → <IP VPS>`.
+- Mở cổng **80** và **443** trên firewall.
+  - GCP (máy bạn đang dùng): vào VPC > Firewall, hoặc:
+    ```bash
+    gcloud compute firewall-rules create allow-http-https \
+      --allow tcp:80,tcp:443 --direction INGRESS --network default
+    ```
+    và gán tag/áp dụng cho VM, hoặc bật sẵn "Allow HTTP/HTTPS traffic" trong cài đặt VM.
+
+### Bước 4 — Chạy
+```bash
+docker compose up -d --build
+docker compose logs -f        # xem log, Ctrl+C để thoát
+```
+Truy cập `https://checkin.congty.com` — Caddy tự lấy chứng chỉ trong ~30 giây.
+
+### Bước 5 — Import nhân viên
+```bash
+docker compose exec app node scripts/import-employees.js employees.sample.csv
+# hoặc dùng trang /admin.html > Import nhân viên (CSV)
+```
+
+### Lệnh vận hành
+| Việc | Lệnh |
+|---|---|
+| Cập nhật code mới | `git pull && docker compose up -d --build` |
+| Xem log | `docker compose logs -f app` |
+| Dừng | `docker compose down` |
+| Sao lưu dữ liệu | copy thư mục `./data` (chứa `checkin.db` + ảnh) |
+
+> **Không có domain?** Vẫn chạy được tạm bằng Cloudflare Tunnel: bỏ comment `ports: 3000:3000` trong `docker-compose.yml`, xoá service `caddy`, rồi chạy `cloudflared tunnel --url http://localhost:3000` để lấy URL HTTPS. Tuy nhiên cho sự kiện thật nên mua 1 domain (vài chục nghìn/năm) cho ổn định.
+
 ## Cấu trúc
 ```
-server.js      API + phục vụ web
-db.js          SQLite schema
-lib.js         CCCD hash, haversine, parse CSV
-config.js      đọc .env
-public/        index(check-in) + admin + draw
-scripts/       import nhân viên qua CLI
-data/          DB + ảnh (tự tạo, gitignore)
+server.js            API + phục vụ web
+db.js                SQLite schema
+lib.js               CCCD hash, haversine, parse CSV
+config.js            đọc .env
+public/              index(check-in) + admin + draw
+scripts/             import nhân viên qua CLI
+data/                DB + ảnh (tự tạo, gitignore)
+Dockerfile           build image
+docker-compose.yml   app + Caddy (HTTPS tự động)
+Caddyfile            cấu hình reverse proxy + SSL
 ```
 
 ## Lưu ý vận hành sự kiện

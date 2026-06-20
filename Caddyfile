@@ -1,0 +1,5 @@
+# Caddy tự xin chứng chỉ SSL Let's Encrypt cho domain trong biến DOMAIN (.env)
+{$DOMAIN} {
+	encode gzip
+	reverse_proxy app:3000
+}
