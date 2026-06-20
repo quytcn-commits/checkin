@@ -9,6 +9,8 @@ const state = {
   accuracy: null,
   facing: 'environment',
   stream: null,
+  geofenceEnabled: false,
+  gpsAsked: false,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -46,7 +48,7 @@ $('ios-banner-x').addEventListener('click', () => $('ios-banner').classList.add(
 fetch('/api/config').then((r) => r.json()).then((c) => {
   $('eventName').textContent = c.eventName;
   document.title = 'Check-in · ' + c.eventName;
-  state.geofenceEnabled = c.geofenceEnabled;
+  state.geofenceEnabled = !!c.geofenceEnabled;
   if (!c.checkinOpen) {
     showMsg($('msg-cccd'), 'info', '⏰ ' + (c.checkinMessage || 'Hiện chưa mở check-in.'));
     $('btn-verify').disabled = true;
@@ -78,7 +80,14 @@ $('btn-verify').addEventListener('click', async () => {
     $('hello').innerHTML = `Xin chào <b>${data.name}</b>${data.department ? ' · ' + data.department : ''}. Hãy đứng trước backdrop và chụp ảnh nhé!`;
     setDot(1);
     goStep('step-photo');
-    startCamera();
+    if (state.geofenceEnabled && (typeof state.lat !== 'number' || typeof state.lng !== 'number')) {
+      $('btn-start-gps').classList.remove('hidden');
+      $('btn-capture').classList.add('hidden');
+      $('btn-switch').classList.add('hidden');
+      showMsg($('msg-photo'), 'info', 'Bấm "Bật vị trí GPS" và chọn Cho phép để tiếp tục chụp ảnh.');
+    } else {
+      startCamera();
+    }
   } catch (e) {
     showMsg($('msg-cccd'), 'err', 'Lỗi kết nối, thử lại.');
   } finally {
@@ -97,6 +106,9 @@ async function startCamera() {
     $('video').srcObject = state.stream;
     $('video').classList.remove('hidden');
     $('preview').classList.add('hidden');
+    $('btn-start-gps').classList.add('hidden');
+    $('btn-capture').classList.remove('hidden');
+    $('btn-switch').classList.remove('hidden');
   } catch (e) {
     showMsg($('msg-photo'), 'err', 'Không mở được camera. Vui lòng cấp quyền camera cho trình duyệt rồi tải lại trang.');
   }
@@ -108,6 +120,22 @@ function stopCamera() {
 $('btn-switch').addEventListener('click', () => {
   state.facing = state.facing === 'environment' ? 'user' : 'environment';
   startCamera();
+});
+
+$('btn-start-gps').addEventListener('click', () => {
+  state.gpsAsked = true;
+  $('btn-start-gps').classList.add('hidden');
+  getGps({
+    statusEl: $('msg-photo'),
+    manageSubmit: false,
+    onSuccess: () => {
+      hideMsg($('msg-photo'));
+      startCamera();
+    },
+    onError: () => {
+      $('btn-start-gps').classList.remove('hidden');
+    },
+  });
 });
 
 $('btn-capture').addEventListener('click', () => {
@@ -137,8 +165,27 @@ $('btn-capture').addEventListener('click', () => {
     $('preview2').classList.remove('hidden');
     setDot(2);
     goStep('step-submit');
+    refreshSubmitGps();
   }, 700);
 });
+
+// Cập nhật ô GPS + nút gửi ở bước 3 theo trạng thái hiện có (GPS có thể đã lấy
+// từ bước "Bật vị trí GPS" trước camera, hoặc đang lấy nền khi geofence tắt).
+function refreshSubmitGps() {
+  const hasGps = typeof state.lat === 'number' && typeof state.lng === 'number';
+  if (hasGps) {
+    showMsg($('gps-status'), 'ok', `📍 Đã lấy vị trí (sai số ~${Math.round(state.accuracy || 0)}m).`);
+    $('btn-gps-retry').classList.add('hidden');
+    $('btn-submit').disabled = false;
+  } else if (!state.geofenceEnabled) {
+    showMsg($('gps-status'), 'info', 'GPS không bắt buộc — bạn có thể bấm "Gửi check-in".');
+    $('btn-submit').disabled = false;
+  } else {
+    showMsg($('gps-status'), 'err', 'Chưa có vị trí GPS. Bấm "Thử lấy lại vị trí" và chọn Cho phép để check-in hợp lệ.');
+    $('btn-gps-retry').classList.remove('hidden');
+    $('btn-submit').disabled = true;
+  }
+}
 
 $('btn-retake').addEventListener('click', () => {
   state.photoDataUrl = null;
@@ -149,27 +196,31 @@ $('btn-retake').addEventListener('click', () => {
 });
 
 // ---------- Bước 3: GPS + gửi ----------
-function getGps() {
-  $('btn-gps-retry').classList.add('hidden');
+function getGps(options = {}) {
+  const statusEl = options.statusEl || $('gps-status');
+  const manageSubmit = options.manageSubmit !== false;
+  if (manageSubmit) $('btn-gps-retry').classList.add('hidden');
   // geofence tắt -> GPS không bắt buộc: cho gửi ngay, lấy GPS nền để lưu nếu được
   const optional = !state.geofenceEnabled;
-  if (optional) $('btn-submit').disabled = false;
+  if (manageSubmit) $('btn-submit').disabled = !optional;
 
   if (!navigator.geolocation) {
-    showMsg($('gps-status'), optional ? 'info' : 'err',
+    showMsg(statusEl, optional ? 'info' : 'err',
       optional ? 'GPS không bắt buộc — bạn có thể bấm "Gửi check-in".' : 'Thiết bị không hỗ trợ GPS.');
-    $('btn-submit').disabled = false;
+    if (manageSubmit) $('btn-submit').disabled = !optional;
+    if (options.onError) options.onError();
     return;
   }
-  showMsg($('gps-status'), 'info',
+  showMsg(statusEl, 'info',
     `<span class="spinner"></span> Đang lấy vị trí GPS${optional ? ' (không bắt buộc, có thể gửi luôn)' : ''}...`);
   navigator.geolocation.getCurrentPosition(
     (pos) => {
       state.lat = pos.coords.latitude;
       state.lng = pos.coords.longitude;
       state.accuracy = pos.coords.accuracy;
-      showMsg($('gps-status'), 'ok', `📍 Đã lấy vị trí (sai số ~${Math.round(pos.coords.accuracy)}m).`);
-      $('btn-submit').disabled = false;
+      showMsg(statusEl, 'ok', `📍 Đã lấy vị trí (sai số ~${Math.round(pos.coords.accuracy)}m).`);
+      if (manageSubmit) $('btn-submit').disabled = false;
+      if (options.onSuccess) options.onSuccess(pos);
     },
     (err) => {
       const inApp = isInAppBrowser();
@@ -185,10 +236,13 @@ function getGps() {
       }
       const tail = optional
         ? '<br>👉 GPS không bắt buộc — bạn <b>cứ bấm "Gửi check-in"</b> là xong.'
-        : '<br>👉 Bạn vẫn có thể bấm <b>"Gửi check-in"</b> bên dưới.';
-      showMsg($('gps-status'), optional ? 'info' : 'err', reason + tail);
-      $('btn-gps-retry').classList.remove('hidden');
-      $('btn-submit').disabled = false;
+        : '<br>👉 Cần có GPS để check-in hợp lệ. Vui lòng mở bằng Safari/Chrome, cấp quyền Vị trí, rồi bấm "Thử lấy lại vị trí".';
+      showMsg(statusEl, optional ? 'info' : 'err', reason + tail);
+      if (manageSubmit) {
+        $('btn-gps-retry').classList.remove('hidden');
+        $('btn-submit').disabled = !optional;
+      }
+      if (options.onError) options.onError(err);
     },
     { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
   );
@@ -198,6 +252,11 @@ $('btn-gps-retry').addEventListener('click', getGps);
 
 $('btn-submit').addEventListener('click', async () => {
   const btn = $('btn-submit');
+  if (state.geofenceEnabled && (typeof state.lat !== 'number' || typeof state.lng !== 'number')) {
+    btn.disabled = true;
+    $('btn-gps-retry').classList.remove('hidden');
+    return showMsg($('msg-submit'), 'err', 'Chưa có GPS nên chưa thể gửi check-in. Hãy cấp quyền Vị trí và thử lấy lại.');
+  }
   btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Đang gửi...';
   hideMsg($('msg-submit'));
   const deviceInfo = {

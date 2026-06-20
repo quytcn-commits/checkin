@@ -56,12 +56,13 @@
   <div class="nw-card hidden" id="step-photo">
     <p class="nw-card-title">Bước 2 · Chụp ảnh tại backdrop</p>
     <p class="hello" id="hello"></p>
-    <video id="video" autoplay playsinline muted></video>
+    <button class="nw-btn ghost hidden" id="btn-start-gps">Bật vị trí GPS</button>
+    <video id="video" class="hidden" autoplay playsinline muted></video>
     <img id="preview" class="hidden" alt="ảnh" />
     <canvas id="canvas" class="hidden"></canvas>
-    <button class="nw-btn" id="btn-capture">📸 Chụp ảnh</button>
+    <button class="nw-btn hidden" id="btn-capture">📸 Chụp ảnh</button>
     <button class="nw-btn secondary hidden" id="btn-retake">Chụp lại</button>
-    <button class="nw-btn ghost" id="btn-switch">🔄 Đổi camera trước/sau</button>
+    <button class="nw-btn ghost hidden" id="btn-switch">🔄 Đổi camera trước/sau</button>
     <div class="msg" id="msg-photo"></div>
   </div>
 
@@ -93,6 +94,6 @@
   <div class="nw-foot"><span class="small">Mỗi nhân viên chỉ check-in 1 lần · Dữ liệu chỉ dùng cho sự kiện</span></div>
 </main>
 
-<script src="/checkin.js?v=20260620b"></script>
+<script src="/checkin.js?v=20260620d"></script>
 </body>
 </html>
