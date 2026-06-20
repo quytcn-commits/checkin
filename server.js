@@ -243,32 +243,68 @@ app.delete('/api/admin/checkins', requireAdmin, (req, res) => {
   res.json({ ok: true, deleted: rows.length });
 });
 
-// Export CSV (kèm cột link ảnh). ?unique=1 -> danh sách quay thưởng: mỗi NV 1 lần, chỉ hợp lệ.
+// Export Excel (.xlsx). ?unique=1 -> danh sách quay thưởng: mỗi NV 1 lần, chỉ hợp lệ.
+// Lấy CCCD/Mã NV đầy đủ từ bảng nhân viên (như lúc import); thời gian theo giờ VN (GMT+7).
 app.get('/api/admin/export', requireAdmin, (req, res) => {
   const unique = req.query.unique === '1';
+  // datetime(..., '+7 hours'): SQLite lưu checkin_time theo UTC -> đổi sang giờ VN
+  const select = `
+    SELECT
+      COALESCE(e.emp_code, '') AS emp_code,
+      COALESCE(e.name, c.name) AS name,
+      COALESCE(e.cccd, '') AS cccd,
+      COALESCE(e.department, c.department) AS department,
+      datetime(c.checkin_time, '+7 hours') AS checkin_vn,
+      c.lat, c.lng, c.gps_accuracy, c.gps_valid, c.ip, c.device_info, c.is_valid, c.photo_path
+    FROM checkins c LEFT JOIN employees e ON e.id = c.employee_id`;
   const rows = unique
-    ? db.prepare(`
-        SELECT c.id, c.name, c.department, c.cccd_last4, c.checkin_time, c.lat, c.lng,
-               c.gps_accuracy, c.gps_valid, c.ip, c.is_valid, c.photo_path FROM checkins c
+    ? db.prepare(`${select}
         WHERE c.is_valid = 1
           AND c.id = (SELECT MAX(c2.id) FROM checkins c2 WHERE c2.employee_id = c.employee_id AND c2.is_valid = 1)
-        ORDER BY c.name
-      `).all()
-    : db.prepare(`
-        SELECT id, name, department, cccd_last4, checkin_time, lat, lng, gps_accuracy,
-               gps_valid, ip, is_valid, photo_path FROM checkins ORDER BY id
-      `).all();
+        ORDER BY e.name`).all()
+    : db.prepare(`${select} ORDER BY c.id`).all();
+
   const base = `${req.protocol}://${req.get('host')}`;
-  const header = ['id', 'name', 'department', 'cccd_last4', 'checkin_time', 'lat', 'lng', 'gps_accuracy', 'gps_valid', 'ip', 'is_valid', 'photo_url'];
-  const esc = (v) => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
-  const lines = [header.join(',')];
-  for (const r of rows) {
-    r.photo_url = r.photo_path ? `${base}/uploads/${r.photo_path}` : '';
-    lines.push(header.map((h) => esc(r[h])).join(','));
-  }
-  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-  res.setHeader('Content-Disposition', `attachment; filename="${unique ? 'danh-sach-quay-thuong' : 'checkins'}.csv"`);
-  res.send('﻿' + lines.join('\n'));
+  // 'YYYY-MM-DD HH:MM:SS' -> 'DD/MM/YYYY HH:MM:SS'
+  const fmtVN = (s) => {
+    if (!s) return '';
+    const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}:\d{2}:\d{2})/.exec(s);
+    return m ? `${m[3]}/${m[2]}/${m[1]} ${m[4]}` : s;
+  };
+  const devStr = (d) => { try { const o = JSON.parse(d || '{}'); return [o.platform, o.screen].filter(Boolean).join(' · '); } catch (e) { return ''; } };
+
+  const header = ['STT', 'Mã NV', 'Họ tên', 'CCCD', 'Phòng ban', 'Thời gian check-in (GMT+7)',
+    'Hợp lệ', 'GPS trong vùng', 'Vĩ độ', 'Kinh độ', 'Sai số GPS (m)', 'IP', 'Thiết bị', 'Link ảnh'];
+  const aoa = [header];
+  rows.forEach((r, i) => {
+    aoa.push([
+      i + 1,
+      r.emp_code || '',
+      r.name || '',
+      r.cccd || '',
+      r.department || '',
+      fmtVN(r.checkin_vn),
+      r.is_valid ? 'Hợp lệ' : 'Không',
+      r.lat == null ? '' : (r.gps_valid ? 'Trong vùng' : 'Ngoài vùng'),
+      r.lat == null ? '' : r.lat,
+      r.lng == null ? '' : r.lng,
+      r.gps_accuracy == null ? '' : Math.round(r.gps_accuracy),
+      r.ip || '',
+      devStr(r.device_info),
+      r.photo_path ? `${base}/uploads/${r.photo_path}` : '',
+    ]);
+  });
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{ wch: 5 }, { wch: 12 }, { wch: 24 }, { wch: 15 }, { wch: 22 }, { wch: 22 },
+    { wch: 9 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 16 }, { wch: 20 }, { wch: 40 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, unique ? 'Quay thuong' : 'Check-in');
+  const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="${unique ? 'danh-sach-quay-thuong' : 'danh-sach-checkin'}.xlsx"`);
+  res.send(buf);
 });
 
 // Báo cáo HTML kèm ảnh (mở để xem/in PDF). Cho phép mật khẩu qua query.
