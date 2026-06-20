@@ -54,6 +54,8 @@ function openModal(e) {
   $('f-lat').value = e && e.lat != null ? e.lat : '';
   $('f-lng').value = e && e.lng != null ? e.lng : '';
   $('f-radius').value = e && e.radius != null ? e.radius : 300;
+  $('f-maps').value = '';
+  $('maps-msg').textContent = '';
   $('here-msg').textContent = '';
   $('modal-msg').className = 'msg';
   $('modal').classList.add('show');
@@ -62,6 +64,51 @@ window.editEv = (id) => { const e = EVENTS.find((x) => x.id === id); if (e) open
 $('btn-add').addEventListener('click', () => openModal(null));
 $('btn-cancel').addEventListener('click', () => $('modal').classList.remove('show'));
 $('modal').addEventListener('click', (e) => { if (e.target.id === 'modal') $('modal').classList.remove('show'); });
+
+// Trích vĩ độ/kinh độ từ link Google Maps hoặc chuỗi "lat, lng"
+function parseLatLng(text) {
+  if (!text) return null;
+  text = text.trim();
+  let m = text.match(/^(-?\d{1,3}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)$/);            // "lat, lng"
+  if (m) return { lat: +m[1], lng: +m[2] };
+  m = text.match(/!3d(-?\d{1,3}\.\d+)!4d(-?\d{1,3}\.\d+)/);                   // địa điểm chính xác trong URL
+  if (m) return { lat: +m[1], lng: +m[2] };
+  m = text.match(/@(-?\d{1,3}\.\d+),(-?\d{1,3}\.\d+)/);                       // tâm bản đồ @lat,lng
+  if (m) return { lat: +m[1], lng: +m[2] };
+  m = text.match(/[?&](?:q|query|ll|center|destination)=(-?\d{1,3}\.\d+),\s*(-?\d{1,3}\.\d+)/); // ?q=lat,lng
+  if (m) return { lat: +m[1], lng: +m[2] };
+  m = text.match(/(-?\d{1,3}\.\d{4,}),\s*(-?\d{1,3}\.\d{4,})/);              // 2 số thập phân bất kỳ
+  if (m) return { lat: +m[1], lng: +m[2] };
+  return null;
+}
+
+function applyCoord(c, src) {
+  $('f-lat').value = c.lat;
+  $('f-lng').value = c.lng;
+  $('f-geo').checked = true;
+  $('maps-msg').textContent = `✅ Đã lấy: ${c.lat}, ${c.lng}${src ? ' (' + src + ')' : ''}`;
+}
+
+async function doParseMaps() {
+  const txt = $('f-maps').value.trim();
+  if (!txt) { $('maps-msg').textContent = ''; return; }
+  const c = parseLatLng(txt);
+  if (c) { applyCoord(c); return; }
+  // Link rút gọn (maps.app.goo.gl / goo.gl) -> nhờ server mở ra lấy toạ độ
+  if (/^https?:\/\//i.test(txt) && /goo\.gl|maps\.app/i.test(txt)) {
+    $('maps-msg').textContent = 'Đang mở link rút gọn...';
+    try {
+      const res = await fetch('/api/admin/resolve-maps', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ url: txt }) });
+      const data = await res.json();
+      if (res.ok && data.lat != null) { applyCoord(data, 'từ link'); return; }
+      $('maps-msg').textContent = data.error || 'Không lấy được toạ độ. Hãy mở link rồi copy phần "@vĩ độ,kinh độ".';
+    } catch (e) { $('maps-msg').textContent = 'Lỗi kết nối khi mở link.'; }
+    return;
+  }
+  $('maps-msg').textContent = '⚠️ Không nhận ra toạ độ. Dán link đầy đủ (có @...) hoặc "vĩ độ, kinh độ".';
+}
+$('btn-parse').addEventListener('click', doParseMaps);
+$('f-maps').addEventListener('paste', () => setTimeout(doParseMaps, 50));
 
 $('btn-here').addEventListener('click', () => {
   if (!navigator.geolocation) { $('here-msg').textContent = 'Thiết bị không hỗ trợ GPS.'; return; }

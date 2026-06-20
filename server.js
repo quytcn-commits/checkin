@@ -262,6 +262,30 @@ app.get('/api/admin/events', requireAdmin, (req, res) => {
   res.json(rows);
 });
 
+// Mở link Google Maps rút gọn (maps.app.goo.gl) -> trả về toạ độ
+function extractLatLng(text) {
+  let m = text.match(/!3d(-?\d{1,3}\.\d+)!4d(-?\d{1,3}\.\d+)/);
+  if (m) return { lat: +m[1], lng: +m[2] };
+  m = text.match(/@(-?\d{1,3}\.\d+),(-?\d{1,3}\.\d+)/);
+  if (m) return { lat: +m[1], lng: +m[2] };
+  m = text.match(/[?&](?:q|query|ll|center|destination)=(-?\d{1,3}\.\d+),(-?\d{1,3}\.\d+)/);
+  if (m) return { lat: +m[1], lng: +m[2] };
+  return null;
+}
+app.post('/api/admin/resolve-maps', requireAdmin, async (req, res) => {
+  const url = (req.body.url || '').trim();
+  if (!/^https?:\/\//i.test(url)) return res.status(400).json({ error: 'Link không hợp lệ' });
+  try {
+    const r = await fetch(url, { redirect: 'follow', headers: { 'User-Agent': 'Mozilla/5.0' } });
+    let coord = extractLatLng(r.url || '');
+    if (!coord) coord = extractLatLng((await r.text()).slice(0, 20000));
+    if (!coord) return res.status(404).json({ error: 'Không tìm thấy toạ độ. Hãy mở link rồi copy "@vĩ độ,kinh độ".' });
+    res.json(coord);
+  } catch (e) {
+    res.status(500).json({ error: 'Không mở được link (thử copy toạ độ thủ công).' });
+  }
+});
+
 app.post('/api/admin/events', requireAdmin, (req, res) => {
   const b = req.body || {};
   if (!b.name || !b.name.trim()) return res.status(400).json({ error: 'Thiếu tên sự kiện/địa điểm' });

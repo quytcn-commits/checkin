@@ -50,6 +50,12 @@
     </div>
 
     <label class="switch" style="margin-top:12px"><input type="checkbox" id="f-geo" /> Giới hạn vị trí (GPS)</label>
+    <label>📋 Dán link Google Maps (hoặc "vĩ độ, kinh độ")</label>
+    <div class="row2" style="align-items:flex-end">
+      <div style="flex:2"><input type="text" id="f-maps" placeholder='VD: https://maps.app.goo.gl/... hoặc 10.7626, 106.6601' /></div>
+      <button class="btn secondary" style="margin:0;padding:11px 14px;flex:0 0 auto" id="btn-parse">Lấy toạ độ</button>
+    </div>
+    <div class="set-note" id="maps-msg"></div>
     <div class="row2">
       <div><label>Vĩ độ</label><input type="text" id="f-lat" placeholder="10.762622" /></div>
       <div><label>Kinh độ</label><input type="text" id="f-lng" placeholder="106.660172" /></div>
