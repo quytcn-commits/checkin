@@ -32,13 +32,16 @@ function showDash() {
   $('dash').classList.remove('hidden');
   loadAll();
   loadSettings();
-  loadExportEvents();
+  loadEvents();
 }
+
+function curEvent() { return $('filter-event') ? $('filter-event').value : ''; }
+function evParam() { return curEvent() ? '?event=' + encodeURIComponent(curEvent()) : ''; }
 
 async function loadAll() {
   const [stats, rows] = await Promise.all([
-    fetch('/api/admin/stats', { headers: authHeaders() }).then((r) => r.json()),
-    fetch('/api/admin/checkins', { headers: authHeaders() }).then((r) => r.json()),
+    fetch('/api/admin/stats' + evParam(), { headers: authHeaders() }).then((r) => r.json()),
+    fetch('/api/admin/checkins' + evParam(), { headers: authHeaders() }).then((r) => r.json()),
   ]);
   $('s-emp').textContent = stats.totalEmp;
   $('s-checkin').textContent = stats.totalCheckin;
@@ -80,6 +83,7 @@ function renderTable() {
       <td>${photo}</td>
       <td>${r.name || ''}</td>
       <td>${r.department || ''}</td>
+      <td>${r.event_name || '—'}</td>
       <td>****${r.cccd_last4 || ''}</td>
       <td>${(r.checkin_time || '').replace('T', ' ')}</td>
       <td>${gpsCell(r)}</td>
@@ -98,7 +102,7 @@ function renderGallery() {
       <div class="gph">${r.photo_path ? `<img class="thumb" src="/uploads/${r.photo_path}" data-full="/uploads/${r.photo_path}" />` : '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;font-size:12px">Không ảnh</div>'}</div>
       <div class="gmeta">
         <div class="gnm">#${r.id} · ${r.name || ''} <span class="pill ${r.is_valid ? 'ok' : 'no'}" style="font-size:10px">${r.is_valid ? 'OK' : 'X'}</span></div>
-        <div class="gln">${r.department || ''}</div>
+        <div class="gln">${r.department || ''}${r.event_name ? ' · 📍' + r.event_name : ''}</div>
         <div class="gln">${(r.checkin_time || '').replace('T', ' ')}</div>
         <div class="gln">${r.lat != null ? (r.gps_valid ? '📍 trong vùng' : '⚠️ ngoài vùng') : 'GPS —'}</div>
         <button class="btn-sm btn-del btn-del-checkin" style="margin-top:6px" data-id="${r.id}" data-name="${encodeURIComponent(r.name || '')}">🗑️ Xoá để check-in lại</button>
@@ -107,7 +111,7 @@ function renderGallery() {
 }
 
 $('search').addEventListener('input', render);
-$('btn-refresh').addEventListener('click', loadAll);
+$('btn-refresh').addEventListener('click', () => { loadAll(); loadEvents(); });
 
 // Chuyển chế độ xem
 function setView(v) {
@@ -123,8 +127,7 @@ $('view-gallery').addEventListener('click', () => setView('gallery'));
 
 // Xuất CSV + Báo cáo ảnh
 function exportEventParam() {
-  const ev = $('export-event') ? $('export-event').value : '';
-  return ev ? '&event=' + encodeURIComponent(ev) : '';
+  return curEvent() ? '&event=' + encodeURIComponent(curEvent()) : '';
 }
 $('btn-export').addEventListener('click', () => {
   window.location = '/api/admin/export?pw=' + encodeURIComponent(PW) + exportEventParam();
@@ -133,14 +136,36 @@ $('btn-export-draw').addEventListener('click', () => {
   window.location = '/api/admin/export?unique=1&pw=' + encodeURIComponent(PW) + exportEventParam();
 });
 
-// Nạp danh sách địa điểm vào dropdown export
-async function loadExportEvents() {
+// Đổi địa điểm lọc -> tải lại dashboard (thẻ + bảng) theo địa điểm đó
+$('filter-event').addEventListener('change', loadAll);
+
+function evWindowText(e) {
+  if (!e.window_enabled) return 'Không giới hạn';
+  const f = (ms) => ms ? new Date(ms).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : '…';
+  return `${f(e.start_ms)} → ${f(e.end_ms)}`;
+}
+
+// Nạp danh sách địa điểm vào dropdown lọc + bảng báo cáo theo sự kiện
+async function loadEvents() {
   try {
     const evs = await fetch('/api/admin/events', { headers: authHeaders() }).then((r) => r.json());
-    if (!evs.length) return;
-    const sel = $('export-event');
+    const sel = $('filter-event');
+    const cur = sel.value;
     sel.innerHTML = '<option value="">🌐 Tất cả địa điểm</option>' +
       evs.map((e) => `<option value="${e.id}">${e.name} (${e.checkins})</option>`).join('');
+    sel.value = cur;
+    if (evs.length) {
+      $('event-report').classList.remove('hidden');
+      $('ev-report-body').innerHTML = evs.map((e) => `<tr>
+        <td><b>${e.name}</b></td>
+        <td class="small">${evWindowText(e)}</td>
+        <td>${e.checkins}</td>
+        <td><b style="color:var(--green)">${e.valid_people}</b></td>
+        <td>${e.winners}</td>
+      </tr>`).join('');
+    } else {
+      $('event-report').classList.add('hidden');
+    }
   } catch (e) {}
 }
 $('btn-report').addEventListener('click', () => {

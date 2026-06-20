@@ -44,6 +44,17 @@
       <div class="stat"><div class="num" id="s-winner">0</div><div class="lbl">Đã trúng</div></div>
     </div>
 
+    <!-- Báo cáo theo địa điểm -->
+    <div class="panel hidden" id="event-report">
+      <h3>📍 Báo cáo theo địa điểm / sự kiện</h3>
+      <div class="table-wrap" style="max-height:none;padding:0">
+        <table>
+          <thead><tr><th>Địa điểm</th><th>Khung giờ</th><th>Lượt</th><th>Người hợp lệ</th><th>Đã trúng</th></tr></thead>
+          <tbody id="ev-report-body"></tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- Panel cài đặt -->
     <div class="panel hidden" id="settings-panel">
       <h3>⚙️ Cài đặt check-in</h3>
@@ -79,7 +90,7 @@
         <button id="view-gallery">🖼️ Ảnh</button>
       </div>
       <button class="btn secondary" id="btn-settings" style="padding:10px 16px">⚙️ Cài đặt</button>
-      <select id="export-event" class="filter-select" title="Lọc theo địa điểm"><option value="">🌐 Tất cả địa điểm</option></select>
+      <select id="filter-event" class="filter-select" title="Lọc theo địa điểm"><option value="">🌐 Tất cả địa điểm</option></select>
       <button class="btn" id="btn-export">⬇ Excel (tất cả lượt)</button>
       <button class="btn" id="btn-export-draw">🎯 Excel quay thưởng</button>
       <button class="btn" id="btn-report">🖼️ Báo cáo ảnh</button>
@@ -99,7 +110,7 @@
     <div class="table-wrap" id="table-view">
       <table>
         <thead><tr>
-          <th>#</th><th>Ảnh</th><th>Họ tên</th><th>Phòng ban</th><th>CCCD</th>
+          <th>#</th><th>Ảnh</th><th>Họ tên</th><th>Phòng ban</th><th>Địa điểm</th><th>CCCD</th>
           <th>Thời gian</th><th>GPS</th><th>IP</th><th>Thiết bị</th><th>Hợp lệ</th><th>Xoá</th>
         </tr></thead>
         <tbody id="tbody"></tbody>

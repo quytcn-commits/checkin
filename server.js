@@ -213,12 +213,18 @@ function requireAdminMaybe(req, res, next) { next(); }
 // ---------- API quản trị ----------
 
 app.get('/api/admin/stats', requireAdmin, (req, res) => {
+  const eventId = req.query.event ? parseInt(req.query.event, 10) : null;
+  const p = eventId ? { e: eventId } : {};
+  const ec = eventId ? ' WHERE event_id = @e' : '';          // dùng khi không có điều kiện khác
+  const ecAnd = eventId ? ' AND event_id = @e' : '';          // dùng khi đã có WHERE
   const totalEmp = db.prepare('SELECT COUNT(*) c FROM employees').get().c;
-  const totalCheckin = db.prepare('SELECT COUNT(*) c FROM checkins').get().c; // tổng lượt
+  const totalCheckin = db.prepare(`SELECT COUNT(*) c FROM checkins${ec}`).get(p).c; // tổng lượt
   // Hợp lệ vào quay thưởng = số NHÂN VIÊN duy nhất có ít nhất 1 lượt hợp lệ
-  const validCheckin = db.prepare('SELECT COUNT(DISTINCT employee_id) c FROM checkins WHERE is_valid = 1').get().c;
-  const uniqueCheckedIn = db.prepare('SELECT COUNT(DISTINCT employee_id) c FROM checkins').get().c;
-  const winners = db.prepare('SELECT COUNT(*) c FROM draw_winners').get().c;
+  const validCheckin = db.prepare(`SELECT COUNT(DISTINCT employee_id) c FROM checkins WHERE is_valid = 1${ecAnd}`).get(p).c;
+  const uniqueCheckedIn = db.prepare(`SELECT COUNT(DISTINCT employee_id) c FROM checkins${ec}`).get(p).c;
+  const winners = eventId
+    ? db.prepare('SELECT COUNT(*) c FROM draw_winners w JOIN checkins c ON c.id = w.checkin_id WHERE c.event_id = @e').get(p).c
+    : db.prepare('SELECT COUNT(*) c FROM draw_winners').get().c;
   res.json({ totalEmp, totalCheckin, validCheckin, uniqueCheckedIn, winners });
 });
 
@@ -247,8 +253,10 @@ app.post('/api/admin/settings', requireAdmin, (req, res) => {
 // ----- Sự kiện / địa điểm -----
 app.get('/api/admin/events', requireAdmin, (req, res) => {
   const rows = db.prepare(`
-    SELECT e.*, (SELECT COUNT(*) FROM checkins c WHERE c.event_id = e.id) AS checkins,
-      (SELECT COUNT(DISTINCT c.employee_id) FROM checkins c WHERE c.event_id = e.id AND c.is_valid = 1) AS valid_people
+    SELECT e.*,
+      (SELECT COUNT(*) FROM checkins c WHERE c.event_id = e.id) AS checkins,
+      (SELECT COUNT(DISTINCT c.employee_id) FROM checkins c WHERE c.event_id = e.id AND c.is_valid = 1) AS valid_people,
+      (SELECT COUNT(*) FROM draw_winners w JOIN checkins c ON c.id = w.checkin_id WHERE c.event_id = e.id) AS winners
     FROM events e ORDER BY e.start_ms, e.id
   `).all();
   res.json(rows);
@@ -300,11 +308,15 @@ app.delete('/api/admin/events/:id', requireAdmin, (req, res) => {
 });
 
 app.get('/api/admin/checkins', requireAdmin, (req, res) => {
+  const eventId = req.query.event ? parseInt(req.query.event, 10) : null;
+  const where = eventId ? 'WHERE c.event_id = @event' : '';
   const rows = db.prepare(`
-    SELECT id, name, department, cccd_last4, photo_path, checkin_time,
-           lat, lng, gps_accuracy, gps_valid, ip, device_info, is_valid
-    FROM checkins ORDER BY id DESC
-  `).all();
+    SELECT c.id, c.name, c.department, c.cccd_last4, c.photo_path, c.checkin_time,
+           c.lat, c.lng, c.gps_accuracy, c.gps_valid, c.ip, c.device_info, c.is_valid,
+           ev.name AS event_name
+    FROM checkins c LEFT JOIN events ev ON ev.id = c.event_id
+    ${where} ORDER BY c.id DESC
+  `).all(eventId ? { event: eventId } : {});
   res.json(rows);
 });
 
