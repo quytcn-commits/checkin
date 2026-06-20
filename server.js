@@ -7,6 +7,7 @@ const config = require('./config');
 const { db, UPLOAD_DIR } = require('./db');
 const lib = require('./lib');
 const settings = require('./settings');
+const events = require('./events');
 const { parseEmployeesExcel, DEFAULT_SHEET } = require('./lib-excel');
 
 const app = express();
@@ -42,17 +43,28 @@ function savePhoto(dataUrl, checkinId) {
 
 // Config tối thiểu cho frontend
 app.get('/api/config', (req, res) => {
-  const eff = settings.effective();
-  const ws = settings.windowStatus(Date.now());
-  res.json({
-    eventName: config.eventName,
-    geofenceEnabled: eff.geofence.enabled,
-    checkinOpen: ws.open,
-    windowState: ws.state,
-    windowStart: ws.start || null,
-    windowEnd: ws.end || null,
-    checkinMessage: ws.open ? '' : checkinClosedMessage(ws),
-  });
+  const now = Date.now();
+  if (events.hasEvents()) {
+    const open = events.openEvents(now);
+    res.json({
+      eventName: config.eventName,
+      mode: 'events',
+      geofenceEnabled: open.some((e) => e.geofence_enabled), // GPS cần khi có sự kiện mở yêu cầu vị trí
+      checkinOpen: open.length > 0,
+      openEvents: open.map((e) => e.name),
+      checkinMessage: open.length ? '' : 'Hiện chưa đến giờ check-in của địa điểm nào. Vui lòng quay lại đúng khung giờ sự kiện.',
+    });
+  } else {
+    const eff = settings.effective();
+    const ws = settings.windowStatus(now);
+    res.json({
+      eventName: config.eventName,
+      mode: 'global',
+      geofenceEnabled: eff.geofence.enabled,
+      checkinOpen: ws.open,
+      checkinMessage: ws.open ? '' : checkinClosedMessage(ws),
+    });
+  }
 });
 
 // Thông báo khi ngoài khung giờ check-in
@@ -70,8 +82,15 @@ function checkinClosedMessage(ws) {
 
 // Kiểm tra CCCD trước khi chụp ảnh (UX: chào tên + chặn sớm)
 app.post('/api/verify', (req, res) => {
-  const ws = settings.windowStatus(Date.now());
-  if (!ws.open) return res.status(403).json({ ok: false, error: checkinClosedMessage(ws) });
+  const now = Date.now();
+  if (events.hasEvents()) {
+    if (!events.openEvents(now).length) {
+      return res.status(403).json({ ok: false, error: 'Hiện chưa đến giờ check-in của địa điểm nào.' });
+    }
+  } else {
+    const ws = settings.windowStatus(now);
+    if (!ws.open) return res.status(403).json({ ok: false, error: checkinClosedMessage(ws) });
+  }
   const cccd = lib.normalizeCccd(req.body.cccd);
   if (!lib.isValidCccd(cccd)) {
     return res.status(400).json({ ok: false, error: 'Số CCCD/CMND không hợp lệ (cần 9 hoặc 12 số)' });
@@ -91,9 +110,7 @@ app.post('/api/verify', (req, res) => {
 // Gửi check-in
 app.post('/api/checkin', (req, res) => {
   try {
-    const ws = settings.windowStatus(Date.now());
-    if (!ws.open) return res.status(403).json({ ok: false, error: checkinClosedMessage(ws) });
-
+    const now = Date.now();
     const cccd = lib.normalizeCccd(req.body.cccd);
     const { photo, lat, lng, accuracy, consent, deviceInfo } = req.body;
 
@@ -107,30 +124,44 @@ app.post('/api/checkin', (req, res) => {
     if (!emp) {
       return res.status(404).json({ ok: false, error: 'CCCD không có trong danh sách nhân viên' });
     }
-    // Cho phép check-in nhiều lần (mỗi lần là 1 bản ghi). Quay thưởng sẽ tự lọc 1/người.
     if (!photo) {
       return res.status(400).json({ ok: false, error: 'Thiếu ảnh check-in' });
     }
 
     const latN = typeof lat === 'number' ? lat : null;
     const lngN = typeof lng === 'number' ? lng : null;
-    const geo = lib.isWithinGeofence(latN, lngN, settings.effective().geofence);
-    const gpsValid = geo.ok ? 1 : 0;
 
-    // is_valid: có consent + có ảnh + đúng nhân viên + (qua geofence nếu bật)
-    const isValid = consent && (!geo.applicable || geo.ok) ? 1 : 0;
+    // Xác định sự kiện/địa điểm theo giờ + GPS
+    let eventId = null, eventName = null, geofenceApplicable = false, distance = null, gpsValid = 0;
+    const match = events.matchForCheckin(now, latN, lngN);
+    if (match.mode === 'global') {
+      const ws = settings.windowStatus(now);
+      if (!ws.open) return res.status(403).json({ ok: false, error: checkinClosedMessage(ws) });
+      const geo = lib.isWithinGeofence(latN, lngN, settings.effective().geofence);
+      geofenceApplicable = geo.applicable; distance = geo.distance; gpsValid = geo.ok ? 1 : 0;
+    } else {
+      if (!match.event) {
+        return res.status(403).json({ ok: false, error: 'Hiện ngoài khung giờ check-in của các địa điểm.' });
+      }
+      eventId = match.event.id; eventName = match.event.name;
+      geofenceApplicable = !!match.event.geofence_enabled;
+      distance = match.distance != null ? match.distance : null;
+      gpsValid = match.gpsOk ? 1 : 0;
+    }
+    const isValid = consent && (!geofenceApplicable || gpsValid) ? 1 : 0;
 
     const insert = db.prepare(`
       INSERT INTO checkins
-        (employee_id, cccd_hash, cccd_last4, name, department, checkin_time,
+        (employee_id, event_id, cccd_hash, cccd_last4, name, department, checkin_time,
          lat, lng, gps_accuracy, gps_valid, ip, user_agent, device_info, consent, is_valid)
       VALUES
-        (@employee_id, @cccd_hash, @cccd_last4, @name, @department, datetime('now'),
+        (@employee_id, @event_id, @cccd_hash, @cccd_last4, @name, @department, datetime('now'),
          @lat, @lng, @gps_accuracy, @gps_valid, @ip, @user_agent, @device_info, @consent, @is_valid)
     `);
 
     const info = insert.run({
       employee_id: emp.id,
+      event_id: eventId,
       cccd_hash: lib.hashCccd(cccd),
       cccd_last4: lib.last4(cccd),
       name: emp.name,
@@ -154,12 +185,13 @@ app.post('/api/checkin', (req, res) => {
     res.json({
       ok: true,
       name: emp.name,
+      eventName: eventName,
       isValid: !!isValid,
       gpsValid: !!gpsValid,
-      geofenceApplicable: geo.applicable,
-      distance: geo.distance,
+      geofenceApplicable: geofenceApplicable,
+      distance: distance,
       message: isValid
-        ? 'Check-in thành công! Bạn đã đủ điều kiện tham gia quay số may mắn.'
+        ? `Check-in thành công${eventName ? ' tại ' + eventName : ''}! Bạn đã đủ điều kiện tham gia quay số may mắn.`
         : 'Đã ghi nhận check-in nhưng CHƯA hợp lệ cho quay số (vui lòng kiểm tra vị trí GPS).',
     });
   } catch (err) {
@@ -212,6 +244,61 @@ app.post('/api/admin/settings', requireAdmin, (req, res) => {
   res.json({ ...settings.effective(), serverNow: Date.now() });
 });
 
+// ----- Sự kiện / địa điểm -----
+app.get('/api/admin/events', requireAdmin, (req, res) => {
+  const rows = db.prepare(`
+    SELECT e.*, (SELECT COUNT(*) FROM checkins c WHERE c.event_id = e.id) AS checkins,
+      (SELECT COUNT(DISTINCT c.employee_id) FROM checkins c WHERE c.event_id = e.id AND c.is_valid = 1) AS valid_people
+    FROM events e ORDER BY e.start_ms, e.id
+  `).all();
+  res.json(rows);
+});
+
+app.post('/api/admin/events', requireAdmin, (req, res) => {
+  const b = req.body || {};
+  if (!b.name || !b.name.trim()) return res.status(400).json({ error: 'Thiếu tên sự kiện/địa điểm' });
+  const info = db.prepare(`
+    INSERT INTO events (name, geofence_enabled, lat, lng, radius, window_enabled, start_ms, end_ms, active)
+    VALUES (@name, @geofence_enabled, @lat, @lng, @radius, @window_enabled, @start_ms, @end_ms, @active)
+  `).run({
+    name: b.name.trim(),
+    geofence_enabled: b.geofence_enabled ? 1 : 0,
+    lat: b.lat != null ? b.lat : null, lng: b.lng != null ? b.lng : null,
+    radius: b.radius != null ? b.radius : 300,
+    window_enabled: b.window_enabled ? 1 : 0,
+    start_ms: b.start_ms || 0, end_ms: b.end_ms || 0,
+    active: b.active === false ? 0 : 1,
+  });
+  res.json({ id: info.lastInsertRowid });
+});
+
+app.put('/api/admin/events/:id', requireAdmin, (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!db.prepare('SELECT id FROM events WHERE id = ?').get(id)) return res.status(404).json({ error: 'Không tìm thấy' });
+  const b = req.body || {};
+  if (!b.name || !b.name.trim()) return res.status(400).json({ error: 'Thiếu tên sự kiện/địa điểm' });
+  db.prepare(`
+    UPDATE events SET name=@name, geofence_enabled=@geofence_enabled, lat=@lat, lng=@lng, radius=@radius,
+      window_enabled=@window_enabled, start_ms=@start_ms, end_ms=@end_ms, active=@active WHERE id=@id
+  `).run({
+    id, name: b.name.trim(),
+    geofence_enabled: b.geofence_enabled ? 1 : 0,
+    lat: b.lat != null ? b.lat : null, lng: b.lng != null ? b.lng : null,
+    radius: b.radius != null ? b.radius : 300,
+    window_enabled: b.window_enabled ? 1 : 0,
+    start_ms: b.start_ms || 0, end_ms: b.end_ms || 0,
+    active: b.active === false ? 0 : 1,
+  });
+  res.json({ ok: true });
+});
+
+app.delete('/api/admin/events/:id', requireAdmin, (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  db.prepare('UPDATE checkins SET event_id = NULL WHERE event_id = ?').run(id);
+  db.prepare('DELETE FROM events WHERE id = ?').run(id);
+  res.json({ ok: true });
+});
+
 app.get('/api/admin/checkins', requireAdmin, (req, res) => {
   const rows = db.prepare(`
     SELECT id, name, department, cccd_last4, photo_path, checkin_time,
@@ -247,6 +334,9 @@ app.delete('/api/admin/checkins', requireAdmin, (req, res) => {
 // Lấy CCCD/Mã NV đầy đủ từ bảng nhân viên (như lúc import); thời gian theo giờ VN (GMT+7).
 app.get('/api/admin/export', requireAdmin, (req, res) => {
   const unique = req.query.unique === '1';
+  const eventId = req.query.event ? parseInt(req.query.event, 10) : null;
+  const eventCond = eventId ? ' AND c.event_id = @event ' : '';
+  const fp = eventId ? { event: eventId } : {};
   // datetime(..., '+7 hours'): SQLite lưu checkin_time theo UTC -> đổi sang giờ VN
   const select = `
     SELECT
@@ -254,15 +344,18 @@ app.get('/api/admin/export', requireAdmin, (req, res) => {
       COALESCE(e.name, c.name) AS name,
       COALESCE(e.cccd, '') AS cccd,
       COALESCE(e.department, c.department) AS department,
+      COALESCE(ev.name, '') AS event_name,
       datetime(c.checkin_time, '+7 hours') AS checkin_vn,
       c.lat, c.lng, c.gps_accuracy, c.gps_valid, c.ip, c.device_info, c.is_valid, c.photo_path
-    FROM checkins c LEFT JOIN employees e ON e.id = c.employee_id`;
+    FROM checkins c
+    LEFT JOIN employees e ON e.id = c.employee_id
+    LEFT JOIN events ev ON ev.id = c.event_id`;
   const rows = unique
     ? db.prepare(`${select}
-        WHERE c.is_valid = 1
-          AND c.id = (SELECT MAX(c2.id) FROM checkins c2 WHERE c2.employee_id = c.employee_id AND c2.is_valid = 1)
-        ORDER BY e.name`).all()
-    : db.prepare(`${select} ORDER BY c.id`).all();
+        WHERE c.is_valid = 1 ${eventCond}
+          AND c.id = (SELECT MAX(c2.id) FROM checkins c2 WHERE c2.employee_id = c.employee_id AND c2.is_valid = 1${eventId ? ' AND c2.event_id = @event' : ''})
+        ORDER BY e.name`).all(fp)
+    : db.prepare(`${select} ${eventId ? 'WHERE c.event_id = @event' : ''} ORDER BY c.id`).all(fp);
 
   const base = `${req.protocol}://${req.get('host')}`;
   // 'YYYY-MM-DD HH:MM:SS' -> 'DD/MM/YYYY HH:MM:SS'
@@ -273,7 +366,7 @@ app.get('/api/admin/export', requireAdmin, (req, res) => {
   };
   const devStr = (d) => { try { const o = JSON.parse(d || '{}'); return [o.platform, o.screen].filter(Boolean).join(' · '); } catch (e) { return ''; } };
 
-  const header = ['STT', 'Mã NV', 'Họ tên', 'CCCD', 'Phòng ban', 'Thời gian check-in (GMT+7)',
+  const header = ['STT', 'Mã NV', 'Họ tên', 'CCCD', 'Phòng ban', 'Địa điểm', 'Thời gian check-in (GMT+7)',
     'Hợp lệ', 'GPS trong vùng', 'Vĩ độ', 'Kinh độ', 'Sai số GPS (m)', 'IP', 'Thiết bị', 'Link ảnh'];
   const aoa = [header];
   rows.forEach((r, i) => {
@@ -283,6 +376,7 @@ app.get('/api/admin/export', requireAdmin, (req, res) => {
       r.name || '',
       r.cccd || '',
       r.department || '',
+      r.event_name || '',
       fmtVN(r.checkin_vn),
       r.is_valid ? 'Hợp lệ' : 'Không',
       r.lat == null ? '' : (r.gps_valid ? 'Trong vùng' : 'Ngoài vùng'),
@@ -296,7 +390,7 @@ app.get('/api/admin/export', requireAdmin, (req, res) => {
   });
 
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols'] = [{ wch: 5 }, { wch: 12 }, { wch: 24 }, { wch: 15 }, { wch: 22 }, { wch: 22 },
+  ws['!cols'] = [{ wch: 5 }, { wch: 12 }, { wch: 24 }, { wch: 15 }, { wch: 22 }, { wch: 20 }, { wch: 22 },
     { wch: 9 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 16 }, { wch: 20 }, { wch: 40 }];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, unique ? 'Quay thuong' : 'Check-in');
@@ -514,26 +608,31 @@ app.delete('/api/admin/employees/:id', requireAdmin, (req, res) => {
 
 // ---------- API quay số ----------
 
-// Mỗi nhân viên 1 lần (lượt hợp lệ mới nhất), loại người đã trúng
-const DRAW_POOL_SQL = `
-  SELECT c.id, c.employee_id, c.name, c.department, c.photo_path FROM checkins c
-  WHERE c.is_valid = 1
-    AND c.id = (SELECT MAX(c2.id) FROM checkins c2 WHERE c2.employee_id = c.employee_id AND c2.is_valid = 1)
-    AND c.employee_id NOT IN (
-      SELECT ck.employee_id FROM checkins ck JOIN draw_winners w ON w.checkin_id = ck.id
-    )
-`;
+// Mỗi nhân viên 1 lần (lượt hợp lệ mới nhất), loại người đã trúng.
+// Lọc theo sự kiện nếu truyền eventId (null = tất cả địa điểm).
+function drawPool(eventId) {
+  const cond = eventId ? ' AND c.event_id = @event' : '';
+  const sql = `
+    SELECT c.id, c.employee_id, c.name, c.department, c.photo_path FROM checkins c
+    WHERE c.is_valid = 1 ${cond}
+      AND c.id = (SELECT MAX(c2.id) FROM checkins c2 WHERE c2.employee_id = c.employee_id AND c2.is_valid = 1${eventId ? ' AND c2.event_id = @event' : ''})
+      AND c.employee_id NOT IN (
+        SELECT ck.employee_id FROM checkins ck JOIN draw_winners w ON w.checkin_id = ck.id
+      )`;
+  return db.prepare(sql).all(eventId ? { event: eventId } : {});
+}
 
 // Danh sách người hợp lệ chưa trúng (cho hiệu ứng cuộn tên)
 app.get('/api/draw/pool', requireAdmin, (req, res) => {
-  const rows = db.prepare(`SELECT id, name, department FROM (${DRAW_POOL_SQL})`).all();
-  res.json(rows);
+  const eventId = req.query.event ? parseInt(req.query.event, 10) : null;
+  res.json(drawPool(eventId).map((r) => ({ id: r.id, name: r.name, department: r.department })));
 });
 
 // Quay 1 người trúng
 app.post('/api/draw/spin', requireAdmin, (req, res) => {
   const prize = (req.body.prize || '').toString().slice(0, 200);
-  const pool = db.prepare(DRAW_POOL_SQL).all();
+  const eventId = req.body.event ? parseInt(req.body.event, 10) : null;
+  const pool = drawPool(eventId);
   if (pool.length === 0) return res.status(400).json({ error: 'Không còn người hợp lệ để quay' });
   const pick = pool[Math.floor(Math.random() * pool.length)];
   db.prepare('INSERT INTO draw_winners (checkin_id, prize) VALUES (?, ?)').run(pick.id, prize);

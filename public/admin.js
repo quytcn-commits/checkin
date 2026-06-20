@@ -32,6 +32,7 @@ function showDash() {
   $('dash').classList.remove('hidden');
   loadAll();
   loadSettings();
+  loadExportEvents();
 }
 
 async function loadAll() {
@@ -121,12 +122,27 @@ $('view-table').addEventListener('click', () => setView('table'));
 $('view-gallery').addEventListener('click', () => setView('gallery'));
 
 // Xuất CSV + Báo cáo ảnh
+function exportEventParam() {
+  const ev = $('export-event') ? $('export-event').value : '';
+  return ev ? '&event=' + encodeURIComponent(ev) : '';
+}
 $('btn-export').addEventListener('click', () => {
-  window.location = '/api/admin/export?pw=' + encodeURIComponent(PW);
+  window.location = '/api/admin/export?pw=' + encodeURIComponent(PW) + exportEventParam();
 });
 $('btn-export-draw').addEventListener('click', () => {
-  window.location = '/api/admin/export?unique=1&pw=' + encodeURIComponent(PW);
+  window.location = '/api/admin/export?unique=1&pw=' + encodeURIComponent(PW) + exportEventParam();
 });
+
+// Nạp danh sách địa điểm vào dropdown export
+async function loadExportEvents() {
+  try {
+    const evs = await fetch('/api/admin/events', { headers: authHeaders() }).then((r) => r.json());
+    if (!evs.length) return;
+    const sel = $('export-event');
+    sel.innerHTML = '<option value="">🌐 Tất cả địa điểm</option>' +
+      evs.map((e) => `<option value="${e.id}">${e.name} (${e.checkins})</option>`).join('');
+  } catch (e) {}
+}
 $('btn-report').addEventListener('click', () => {
   window.open('/api/admin/report?pw=' + encodeURIComponent(PW), '_blank');
 });

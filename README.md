@@ -69,6 +69,13 @@ Khi nhân viên check-in lỗi (ảnh hỏng, nhầm…):
 - Mỗi dòng/thẻ trong admin có nút **🗑️ Xoá** → nhân viên đó được check-in lại từ đầu (gỡ cả ảnh + kết quả trúng nếu có).
 - Nút **🗑️ Xoá hết check-in** (góc trên) để **reset toàn bộ sau khi test** — không đụng tới danh sách nhân viên.
 
+### Nhiều địa điểm / sự kiện (`/locations.html`)
+Khi sự kiện diễn ra ở **nhiều nơi/khung giờ khác nhau** (vd Hà Nội 16–17h, HCM 9–10h):
+- Vào **📍 Địa điểm** → **Thêm địa điểm**: đặt **tên + khung giờ + vị trí GPS** (nút "Lấy vị trí hiện tại") cho từng nơi.
+- Khi nhân viên check-in, hệ thống **tự gắn vào địa điểm khớp giờ** (và xác thực GPS theo bán kính nơi đó).
+- **Xuất Excel theo từng địa điểm**: ở trang Check-in chọn dropdown **địa điểm** rồi bấm Excel; quay số cũng lọc được theo địa điểm.
+- Nếu **không tạo địa điểm nào** → hệ thống dùng cấu hình chung (geofence/giờ) ở trang Check-in như trước.
+
 ### Quản lý nhân viên (`/employees.html`)
 Vào từ thanh nav **👥 Nhân viên** trong admin:
 - Xem **danh sách nhân viên** (phân trang 20/trang) + tìm kiếm theo tên/CCCD/phòng ban/mã.

@@ -83,4 +83,24 @@ try {
 db.exec('CREATE INDEX IF NOT EXISTS idx_checkins_valid ON checkins(is_valid);');
 db.exec('CREATE INDEX IF NOT EXISTS idx_checkins_emp ON checkins(employee_id);');
 
+// Sự kiện / địa điểm check-in (mỗi cái có vị trí + khung giờ riêng)
+db.exec(`CREATE TABLE IF NOT EXISTS events (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  name             TEXT NOT NULL,
+  geofence_enabled INTEGER DEFAULT 0,
+  lat              REAL,
+  lng              REAL,
+  radius           REAL DEFAULT 300,
+  window_enabled   INTEGER DEFAULT 0,
+  start_ms         INTEGER DEFAULT 0,
+  end_ms           INTEGER DEFAULT 0,
+  active           INTEGER DEFAULT 1,
+  created_at       TEXT DEFAULT (datetime('now'))
+);`);
+
+// Gắn check-in vào sự kiện nào (thêm cột nếu DB cũ chưa có)
+if (!db.prepare('PRAGMA table_info(checkins)').all().some((c) => c.name === 'event_id')) {
+  db.exec('ALTER TABLE checkins ADD COLUMN event_id INTEGER;');
+}
+
 module.exports = { db, DATA_DIR, UPLOAD_DIR };

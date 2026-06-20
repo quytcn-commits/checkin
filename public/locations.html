@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Địa điểm / Sự kiện check-in</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/admin.css" />
+</head>
+<body>
+<div class="admin-wrap">
+  <div class="card" id="login" style="max-width:380px;margin:60px auto">
+    <p class="step-title">🔐 Đăng nhập quản trị</p>
+    <label>Mật khẩu</label>
+    <input id="pw" type="password" placeholder="Mật khẩu admin" />
+    <button class="btn" id="btn-login">Đăng nhập</button>
+    <div class="msg" id="login-msg"></div>
+  </div>
+
+  <div id="dash" class="hidden">
+    <div class="top-nav">
+      <a href="/admin.html">📊 Check-in</a>
+      <a href="/employees.html">👥 Nhân viên</a>
+      <a href="/locations.html" class="active">📍 Địa điểm</a>
+      <a href="/draw.html">🎰 Quay số</a>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+      <h2 style="margin:0">📍 Địa điểm / Sự kiện check-in</h2>
+      <button class="btn" style="width:auto;margin:0;padding:10px 18px" id="btn-add">➕ Thêm địa điểm</button>
+    </div>
+    <div class="msg info show" style="margin:12px 0">Mỗi địa điểm có <b>vị trí + khung giờ</b> riêng. Khi nhân viên check-in, hệ thống tự gắn vào địa điểm khớp giờ (và vị trí GPS). Nếu chưa tạo địa điểm nào, hệ thống dùng cấu hình chung ở trang Check-in.</div>
+
+    <div id="list"></div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modal">
+  <div class="modal">
+    <h3 id="modal-title">Thêm địa điểm</h3>
+    <label>Tên địa điểm / sự kiện *</label>
+    <input type="text" id="f-name" placeholder="VD: Hà Nội - Khách sạn X" />
+
+    <label class="switch" style="margin-top:12px"><input type="checkbox" id="f-win" /> Giới hạn khung giờ</label>
+    <div class="row2">
+      <div><label>Bắt đầu</label><input type="datetime-local" id="f-start" /></div>
+      <div><label>Kết thúc</label><input type="datetime-local" id="f-end" /></div>
+    </div>
+
+    <label class="switch" style="margin-top:12px"><input type="checkbox" id="f-geo" /> Giới hạn vị trí (GPS)</label>
+    <div class="row2">
+      <div><label>Vĩ độ</label><input type="text" id="f-lat" placeholder="10.762622" /></div>
+      <div><label>Kinh độ</label><input type="text" id="f-lng" placeholder="106.660172" /></div>
+    </div>
+    <label>Bán kính (mét)</label>
+    <input type="number" id="f-radius" placeholder="300" />
+    <button class="btn secondary" style="margin:6px 0 0;padding:9px 14px" id="btn-here">📍 Lấy vị trí hiện tại</button>
+    <div class="set-note" id="here-msg"></div>
+
+    <div class="msg" id="modal-msg"></div>
+    <div class="row-btn">
+      <button class="btn secondary" id="btn-cancel">Huỷ</button>
+      <button class="btn" id="btn-save">Lưu</button>
+    </div>
+  </div>
+</div>
+
+<script src="/locations.js"></script>
+</body>
+</html>
