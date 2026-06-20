@@ -37,8 +37,8 @@ async function load() {
       <div class="meta">⏰ ${e.window_enabled ? (fmt(e.start_ms) + ' → ' + fmt(e.end_ms)) : 'Không giới hạn giờ'}</div>
       <div class="meta">📍 ${e.geofence_enabled ? (`${e.lat}, ${e.lng} · bán kính ${e.radius}m`) : 'Không giới hạn vị trí'}</div>
       <div class="acts">
-        <button class="btn-sm btn-edit" onclick='editEv(${JSON.stringify(e)})'>✏️ Sửa</button>
-        <button class="btn-sm btn-del" onclick="delEv(${e.id}, ${JSON.stringify(e.name)})">🗑️ Xoá</button>
+        <button class="btn-sm btn-edit" onclick="editEv(${e.id})">✏️ Sửa</button>
+        <button class="btn-sm btn-del" onclick="delEv(${e.id})">🗑️ Xoá</button>
       </div>
     </div>`).join('') || '<div class="emp">Chưa có địa điểm nào. Bấm "Thêm địa điểm" để tạo (vd Hà Nội, HCM).</div>';
 }
@@ -58,7 +58,7 @@ function openModal(e) {
   $('modal-msg').className = 'msg';
   $('modal').classList.add('show');
 }
-window.editEv = (e) => openModal(e);
+window.editEv = (id) => { const e = EVENTS.find((x) => x.id === id); if (e) openModal(e); };
 $('btn-add').addEventListener('click', () => openModal(null));
 $('btn-cancel').addEventListener('click', () => $('modal').classList.remove('show'));
 $('modal').addEventListener('click', (e) => { if (e.target.id === 'modal') $('modal').classList.remove('show'); });
@@ -103,7 +103,9 @@ $('btn-save').addEventListener('click', async () => {
   load();
 });
 
-window.delEv = async (id, name) => {
+window.delEv = async (id) => {
+  const e = EVENTS.find((x) => x.id === id);
+  const name = e ? e.name : '';
   if (!confirm(`Xoá địa điểm "${name}"?\nCác check-in đã gắn sẽ được gỡ khỏi địa điểm này (không xoá check-in).`)) return;
   const res = await fetch('/api/admin/events/' + id, { method: 'DELETE', headers: authHeaders() });
   if (!res.ok) { alert('Xoá thất bại'); return; }

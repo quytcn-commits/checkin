@@ -1,7 +1,7 @@
 'use strict';
 const $ = (id) => document.getElementById(id);
 let PW = localStorage.getItem('admin_pw') || '';
-let page = 1, search = '', editingId = null, pages = 1, dept = '', checked = '';
+let page = 1, search = '', editingId = null, pages = 1, dept = '', checked = '', ROWS = [];
 
 function authHeaders() { return { 'x-admin-password': PW, 'Content-Type': 'application/json' }; }
 async function tryLogin(pw) {
@@ -38,6 +38,7 @@ async function load() {
   const data = await fetch('/api/admin/employees?' + params, { headers: authHeaders() }).then((r) => r.json());
   pages = data.pages || 1;
   $('count').textContent = `(${data.total})`;
+  ROWS = data.rows;
   $('list').innerHTML = data.rows.map((e) => `
     <div class="emp">
       <div class="top">
@@ -47,8 +48,8 @@ async function load() {
       <div class="cccd">CCCD: ${esc(e.cccd)}</div>
       <div class="meta">${e.department ? 'Phòng ban: <b>' + esc(e.department) + '</b>' : ''}${e.emp_code ? ' · Mã: <b>' + esc(e.emp_code) + '</b>' : ''}</div>
       <div class="acts">
-        <button class="btn-sm btn-edit" onclick='editEmp(${JSON.stringify(e)})'>✏️ Sửa</button>
-        <button class="btn-sm btn-del" onclick="delEmp(${e.id}, ${JSON.stringify(e.name)})">🗑️ Xoá</button>
+        <button class="btn-sm btn-edit" onclick="editEmp(${e.id})">✏️ Sửa</button>
+        <button class="btn-sm btn-del" onclick="delEmp(${e.id})">🗑️ Xoá</button>
       </div>
     </div>`).join('') || '<div class="emp">Không có nhân viên nào.</div>';
   renderPager();
@@ -101,7 +102,7 @@ function openModal(emp) {
   $('modal-msg').className = 'msg';
   $('modal').classList.add('show');
 }
-window.editEmp = (emp) => openModal(emp);
+window.editEmp = (id) => { const e = ROWS.find((x) => x.id === id); if (e) openModal(e); };
 $('btn-add').addEventListener('click', () => openModal(null));
 $('btn-cancel').addEventListener('click', () => $('modal').classList.remove('show'));
 $('modal').addEventListener('click', (e) => { if (e.target.id === 'modal') $('modal').classList.remove('show'); });
@@ -122,7 +123,9 @@ $('btn-save').addEventListener('click', async () => {
   load();
 });
 
-window.delEmp = async (id, name) => {
+window.delEmp = async (id) => {
+  const e = ROWS.find((x) => x.id === id);
+  const name = e ? e.name : '';
   if (!confirm('Xoá nhân viên "' + name + '"?')) return;
   const res = await fetch('/api/admin/employees/' + id, { method: 'DELETE', headers: authHeaders() });
   const data = await res.json();
