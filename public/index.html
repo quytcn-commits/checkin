@@ -12,6 +12,11 @@
 <body>
 <img class="nw-bgm" src="/login/bg-mobile.png" alt="" />
 
+<div id="ios-banner" class="nw-banner hidden">
+  <span id="ios-banner-text">⚠️ Bạn đang mở trong ứng dụng (Zalo/Facebook). Nếu không bật được Vị trí/Camera, bấm <b>•••</b> góc trên rồi chọn <b>"Mở bằng Safari / trình duyệt"</b>.</span>
+  <button id="ios-banner-x" aria-label="đóng">✕</button>
+</div>
+
 <header class="nw-top">
   <img class="mark" src="/login/logo-mark.png" alt="" />
   <img class="txt" src="/login/logo-text.png" alt="NewWay Realty" />
@@ -66,6 +71,7 @@
     <p class="nw-card-sub">Đang lấy vị trí GPS và gửi thông tin...</p>
     <img id="preview2" class="hidden" alt="ảnh" />
     <div class="msg info show" id="gps-status"><span class="spinner"></span> Đang lấy vị trí GPS...</div>
+    <button class="nw-btn ghost hidden" id="btn-gps-retry">📍 Thử lấy lại vị trí</button>
     <button class="nw-btn" id="btn-submit" disabled>Gửi check-in</button>
     <div class="msg" id="msg-submit"></div>
   </div>

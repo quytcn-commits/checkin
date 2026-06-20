@@ -26,6 +26,22 @@ function goStep(name) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+// Phát hiện trình duyệt in-app (Zalo/FB/...) — hay chặn GPS trên iOS
+function isInAppBrowser() {
+  return /Zalo|FBAN|FBAV|FB_IAB|Instagram|Line\/|Messenger|TikTok|MicroMessenger|GSA/i.test(navigator.userAgent || '');
+}
+function isIOS() {
+  const ua = navigator.userAgent || '';
+  return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+if (isInAppBrowser()) {
+  if (isIOS()) {
+    $('ios-banner-text').innerHTML = '⚠️ Bạn đang mở trong <b>Zalo/Facebook</b>. iOS chặn quyền Vị trí ở đây — hãy bấm <b>•••</b> góc dưới phải → <b>"Mở bằng Safari"</b> để check-in chuẩn.';
+  }
+  $('ios-banner').classList.remove('hidden');
+}
+$('ios-banner-x').addEventListener('click', () => $('ios-banner').classList.add('hidden'));
+
 // Tải tên sự kiện
 fetch('/api/config').then((r) => r.json()).then((c) => {
   $('eventName').textContent = c.eventName;
@@ -132,11 +148,13 @@ $('btn-retake').addEventListener('click', () => {
 
 // ---------- Bước 3: GPS + gửi ----------
 function getGps() {
+  $('btn-gps-retry').classList.add('hidden');
   if (!navigator.geolocation) {
-    showMsg($('gps-status'), 'err', 'Thiết bị không hỗ trợ GPS. Vẫn có thể gửi nhưng có thể không hợp lệ cho quay số.');
+    showMsg($('gps-status'), 'err', 'Thiết bị không hỗ trợ GPS. Vẫn bấm "Gửi check-in" được nhé.');
     $('btn-submit').disabled = false;
     return;
   }
+  showMsg($('gps-status'), 'info', '<span class="spinner"></span> Đang lấy vị trí GPS...');
   navigator.geolocation.getCurrentPosition(
     (pos) => {
       state.lat = pos.coords.latitude;
@@ -146,12 +164,25 @@ function getGps() {
       $('btn-submit').disabled = false;
     },
     (err) => {
-      showMsg($('gps-status'), 'err', 'Không lấy được GPS (' + err.message + '). Hãy bật Vị trí/Location rồi thử lại. Bạn vẫn có thể gửi.');
+      const inApp = isInAppBrowser();
+      let msg = 'Không lấy được GPS. ';
+      if (err.code === 1) {
+        msg += inApp
+          ? 'Trình duyệt trong Zalo/Facebook chặn vị trí — hãy <b>mở bằng Safari</b> (••• → Mở bằng Safari). '
+          : 'Hãy vào Cài đặt bật <b>Vị trí/Location</b> cho trình duyệt rồi thử lại. ';
+      } else {
+        msg += '(' + err.message + ') ';
+      }
+      msg += '<br>👉 Bạn vẫn có thể bấm <b>"Gửi check-in"</b> bên dưới.';
+      showMsg($('gps-status'), 'err', msg);
+      $('btn-gps-retry').classList.remove('hidden');
       $('btn-submit').disabled = false;
     },
     { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
   );
 }
+
+$('btn-gps-retry').addEventListener('click', getGps);
 
 $('btn-submit').addEventListener('click', async () => {
   const btn = $('btn-submit');
