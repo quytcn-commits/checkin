@@ -86,11 +86,15 @@ Vào `/draw.html` → nhập tên giải → bấm **QUAY**. Hệ thống chỉ 
 
 ---
 
-## Điều kiện "hợp lệ" để vào quay số
+## Check-in nhiều lần & quay thưởng 1 người 1 lần
+- Nhân viên **được check-in nhiều lần** (vd lần đầu lỗi GPS/ảnh → tự quét lại). Mỗi lần là 1 bản ghi (1 "lượt").
+- **Danh sách quay thưởng & đếm hợp lệ chỉ tính mỗi nhân viên 1 lần** (lấy lượt hợp lệ mới nhất). Người đã trúng bị loại hoàn toàn dù có nhiều lượt.
+- Nút **🎯 DS quay thưởng** trong admin xuất CSV danh sách duy nhất (mỗi người 1 dòng, chỉ hợp lệ).
+
+## Điều kiện "hợp lệ" để vào quay số (xét theo từng lượt)
 - Đã đồng ý điều khoản (consent)
 - Có trong danh sách nhân viên (CCCD khớp)
 - Có ảnh check-in
-- Chưa check-in trước đó (1 nhân viên = 1 lần)
 - Nếu bật geofence: GPS nằm trong bán kính
 
 ## Bảo mật & dữ liệu cá nhân (Nghị định 13/2023/NĐ-CP)

@@ -41,6 +41,7 @@ async function loadAll() {
   ]);
   $('s-emp').textContent = stats.totalEmp;
   $('s-checkin').textContent = stats.totalCheckin;
+  if ($('s-unique')) $('s-unique').textContent = stats.uniqueCheckedIn != null ? `(${stats.uniqueCheckedIn} người)` : '';
   $('s-valid').textContent = stats.validCheckin;
   $('s-winner').textContent = stats.winners;
   ALL = rows;
@@ -122,6 +123,9 @@ $('view-gallery').addEventListener('click', () => setView('gallery'));
 // Xuất CSV + Báo cáo ảnh
 $('btn-export').addEventListener('click', () => {
   window.location = '/api/admin/export?pw=' + encodeURIComponent(PW);
+});
+$('btn-export-draw').addEventListener('click', () => {
+  window.location = '/api/admin/export?unique=1&pw=' + encodeURIComponent(PW);
 });
 $('btn-report').addEventListener('click', () => {
   window.open('/api/admin/report?pw=' + encodeURIComponent(PW), '_blank');

@@ -80,11 +80,12 @@ app.post('/api/verify', (req, res) => {
   if (!emp) {
     return res.status(404).json({ ok: false, error: 'CCCD không có trong danh sách nhân viên' });
   }
-  const existed = db.prepare('SELECT id FROM checkins WHERE employee_id = ?').get(emp.id);
-  if (existed) {
-    return res.status(409).json({ ok: false, error: 'Nhân viên này đã check-in rồi' });
-  }
-  res.json({ ok: true, name: emp.name, department: emp.department || '' });
+  // Cho phép check-in nhiều lần. Báo nếu đã từng check-in (để người dùng biết).
+  const prev = db.prepare('SELECT COUNT(*) c, MAX(is_valid) v FROM checkins WHERE employee_id = ?').get(emp.id);
+  res.json({
+    ok: true, name: emp.name, department: emp.department || '',
+    alreadyCheckedIn: prev.c > 0, alreadyValid: !!prev.v,
+  });
 });
 
 // Gửi check-in
@@ -106,10 +107,7 @@ app.post('/api/checkin', (req, res) => {
     if (!emp) {
       return res.status(404).json({ ok: false, error: 'CCCD không có trong danh sách nhân viên' });
     }
-    const existed = db.prepare('SELECT id FROM checkins WHERE employee_id = ?').get(emp.id);
-    if (existed) {
-      return res.status(409).json({ ok: false, error: 'Nhân viên này đã check-in rồi' });
-    }
+    // Cho phép check-in nhiều lần (mỗi lần là 1 bản ghi). Quay thưởng sẽ tự lọc 1/người.
     if (!photo) {
       return res.status(400).json({ ok: false, error: 'Thiếu ảnh check-in' });
     }
@@ -165,9 +163,6 @@ app.post('/api/checkin', (req, res) => {
         : 'Đã ghi nhận check-in nhưng CHƯA hợp lệ cho quay số (vui lòng kiểm tra vị trí GPS).',
     });
   } catch (err) {
-    if (String(err.message).includes('UNIQUE')) {
-      return res.status(409).json({ ok: false, error: 'Nhân viên này đã check-in rồi' });
-    }
     console.error(err);
     res.status(500).json({ ok: false, error: 'Lỗi máy chủ' });
   }
@@ -187,10 +182,12 @@ function requireAdminMaybe(req, res, next) { next(); }
 
 app.get('/api/admin/stats', requireAdmin, (req, res) => {
   const totalEmp = db.prepare('SELECT COUNT(*) c FROM employees').get().c;
-  const totalCheckin = db.prepare('SELECT COUNT(*) c FROM checkins').get().c;
-  const validCheckin = db.prepare('SELECT COUNT(*) c FROM checkins WHERE is_valid = 1').get().c;
+  const totalCheckin = db.prepare('SELECT COUNT(*) c FROM checkins').get().c; // tổng lượt
+  // Hợp lệ vào quay thưởng = số NHÂN VIÊN duy nhất có ít nhất 1 lượt hợp lệ
+  const validCheckin = db.prepare('SELECT COUNT(DISTINCT employee_id) c FROM checkins WHERE is_valid = 1').get().c;
+  const uniqueCheckedIn = db.prepare('SELECT COUNT(DISTINCT employee_id) c FROM checkins').get().c;
   const winners = db.prepare('SELECT COUNT(*) c FROM draw_winners').get().c;
-  res.json({ totalEmp, totalCheckin, validCheckin, winners });
+  res.json({ totalEmp, totalCheckin, validCheckin, uniqueCheckedIn, winners });
 });
 
 // Cài đặt geofence + khung giờ (đọc)
@@ -246,12 +243,21 @@ app.delete('/api/admin/checkins', requireAdmin, (req, res) => {
   res.json({ ok: true, deleted: rows.length });
 });
 
-// Export CSV (kèm cột link ảnh)
+// Export CSV (kèm cột link ảnh). ?unique=1 -> danh sách quay thưởng: mỗi NV 1 lần, chỉ hợp lệ.
 app.get('/api/admin/export', requireAdmin, (req, res) => {
-  const rows = db.prepare(`
-    SELECT id, name, department, cccd_last4, checkin_time, lat, lng, gps_accuracy,
-           gps_valid, ip, is_valid, photo_path FROM checkins ORDER BY id
-  `).all();
+  const unique = req.query.unique === '1';
+  const rows = unique
+    ? db.prepare(`
+        SELECT c.id, c.name, c.department, c.cccd_last4, c.checkin_time, c.lat, c.lng,
+               c.gps_accuracy, c.gps_valid, c.ip, c.is_valid, c.photo_path FROM checkins c
+        WHERE c.is_valid = 1
+          AND c.id = (SELECT MAX(c2.id) FROM checkins c2 WHERE c2.employee_id = c.employee_id AND c2.is_valid = 1)
+        ORDER BY c.name
+      `).all()
+    : db.prepare(`
+        SELECT id, name, department, cccd_last4, checkin_time, lat, lng, gps_accuracy,
+               gps_valid, ip, is_valid, photo_path FROM checkins ORDER BY id
+      `).all();
   const base = `${req.protocol}://${req.get('host')}`;
   const header = ['id', 'name', 'department', 'cccd_last4', 'checkin_time', 'lat', 'lng', 'gps_accuracy', 'gps_valid', 'ip', 'is_valid', 'photo_url'];
   const esc = (v) => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
@@ -261,7 +267,7 @@ app.get('/api/admin/export', requireAdmin, (req, res) => {
     lines.push(header.map((h) => esc(r[h])).join(','));
   }
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-  res.setHeader('Content-Disposition', 'attachment; filename="checkins.csv"');
+  res.setHeader('Content-Disposition', `attachment; filename="${unique ? 'danh-sach-quay-thuong' : 'checkins'}.csv"`);
   res.send('﻿' + lines.join('\n'));
 });
 
@@ -472,22 +478,26 @@ app.delete('/api/admin/employees/:id', requireAdmin, (req, res) => {
 
 // ---------- API quay số ----------
 
+// Mỗi nhân viên 1 lần (lượt hợp lệ mới nhất), loại người đã trúng
+const DRAW_POOL_SQL = `
+  SELECT c.id, c.employee_id, c.name, c.department, c.photo_path FROM checkins c
+  WHERE c.is_valid = 1
+    AND c.id = (SELECT MAX(c2.id) FROM checkins c2 WHERE c2.employee_id = c.employee_id AND c2.is_valid = 1)
+    AND c.employee_id NOT IN (
+      SELECT ck.employee_id FROM checkins ck JOIN draw_winners w ON w.checkin_id = ck.id
+    )
+`;
+
 // Danh sách người hợp lệ chưa trúng (cho hiệu ứng cuộn tên)
 app.get('/api/draw/pool', requireAdmin, (req, res) => {
-  const rows = db.prepare(`
-    SELECT c.id, c.name, c.department FROM checkins c
-    WHERE c.is_valid = 1 AND c.id NOT IN (SELECT checkin_id FROM draw_winners)
-  `).all();
+  const rows = db.prepare(`SELECT id, name, department FROM (${DRAW_POOL_SQL})`).all();
   res.json(rows);
 });
 
 // Quay 1 người trúng
 app.post('/api/draw/spin', requireAdmin, (req, res) => {
   const prize = (req.body.prize || '').toString().slice(0, 200);
-  const pool = db.prepare(`
-    SELECT c.id, c.name, c.department, c.photo_path FROM checkins c
-    WHERE c.is_valid = 1 AND c.id NOT IN (SELECT checkin_id FROM draw_winners)
-  `).all();
+  const pool = db.prepare(DRAW_POOL_SQL).all();
   if (pool.length === 0) return res.status(400).json({ error: 'Không còn người hợp lệ để quay' });
   const pick = pool[Math.floor(Math.random() * pool.length)];
   db.prepare('INSERT INTO draw_winners (checkin_id, prize) VALUES (?, ?)').run(pick.id, prize);

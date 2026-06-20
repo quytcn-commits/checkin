@@ -38,8 +38,8 @@
 
     <div class="stats">
       <div class="stat"><div class="num" id="s-emp">0</div><div class="lbl">Nhân viên</div></div>
-      <div class="stat"><div class="num" id="s-checkin">0</div><div class="lbl">Đã check-in</div></div>
-      <div class="stat"><div class="num" id="s-valid">0</div><div class="lbl">Hợp lệ (quay số)</div></div>
+      <div class="stat"><div class="num" id="s-checkin">0</div><div class="lbl">Lượt check-in <span id="s-unique" style="color:var(--muted)"></span></div></div>
+      <div class="stat"><div class="num" id="s-valid">0</div><div class="lbl">Hợp lệ quay số (mỗi người 1)</div></div>
       <div class="stat"><div class="num" id="s-winner">0</div><div class="lbl">Đã trúng</div></div>
     </div>
 
@@ -78,7 +78,8 @@
         <button id="view-gallery">🖼️ Ảnh</button>
       </div>
       <button class="btn secondary" id="btn-settings" style="padding:10px 16px">⚙️ Cài đặt</button>
-      <button class="btn" id="btn-export">⬇ CSV</button>
+      <button class="btn" id="btn-export">⬇ CSV (tất cả lượt)</button>
+      <button class="btn" id="btn-export-draw">🎯 DS quay thưởng</button>
       <button class="btn" id="btn-report">🖼️ Báo cáo ảnh</button>
       <label class="btn" style="width:auto;margin:0;padding:10px 16px;cursor:pointer">
         ⬆ Excel
