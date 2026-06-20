@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Quản lý nhân viên</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/admin.css" />
+</head>
+<body>
+<div class="admin-wrap">
+  <!-- Login -->
+  <div class="card" id="login" style="max-width:380px;margin:60px auto">
+    <p class="step-title">🔐 Đăng nhập quản trị</p>
+    <label>Mật khẩu</label>
+    <input id="pw" type="password" placeholder="Mật khẩu admin" />
+    <button class="btn" id="btn-login">Đăng nhập</button>
+    <div class="msg" id="login-msg"></div>
+  </div>
+
+  <!-- Dashboard -->
+  <div id="dash" class="hidden">
+    <div class="top-nav">
+      <a href="/admin.html">📊 Check-in</a>
+      <a href="/employees.html" class="active">👥 Nhân viên</a>
+      <a href="/draw.html">🎰 Quay số</a>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+      <h2 style="margin:0">👥 Quản lý nhân viên <span id="count" style="font-size:15px;color:#bfe6cb"></span></h2>
+      <button class="btn" style="width:auto;margin:0;padding:10px 18px" id="btn-add">➕ Thêm nhân viên</button>
+    </div>
+
+    <div class="toolbar">
+      <input type="text" id="search" placeholder="🔍 Tìm theo tên / CCCD / phòng ban / mã NV..." />
+    </div>
+
+    <div id="list"></div>
+    <div class="pager" id="pager"></div>
+  </div>
+</div>
+
+<!-- Modal thêm/sửa -->
+<div class="modal-bg" id="modal">
+  <div class="modal">
+    <h3 id="modal-title">Sửa nhân viên</h3>
+    <label>Họ và tên *</label>
+    <input type="text" id="f-name" placeholder="Nguyễn Văn A" />
+    <label>Số CCCD *</label>
+    <input type="text" id="f-cccd" inputmode="numeric" placeholder="9 hoặc 12 số" />
+    <label>Phòng ban</label>
+    <input type="text" id="f-dept" placeholder="VD: Kinh doanh" />
+    <label>Mã nhân viên</label>
+    <input type="text" id="f-code" placeholder="VD: NV001" />
+    <div class="msg" id="modal-msg"></div>
+    <div class="row-btn">
+      <button class="btn secondary" id="btn-cancel">Huỷ</button>
+      <button class="btn" id="btn-save">Lưu</button>
+    </div>
+  </div>
+</div>
+
+<script src="/employees.js"></script>
+</body>
+</html>

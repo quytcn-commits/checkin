@@ -64,6 +64,12 @@ Vào `/admin.html` → nút **⚙️ Cài đặt** (lưu vào DB, áp dụng nga
 
 Các giá trị `GEOFENCE_*` trong `.env` chỉ là **mặc định ban đầu**; cài trong admin sẽ ghi đè. GPS luôn được lưu dù bật/tắt.
 
+### Quản lý nhân viên (`/employees.html`)
+Vào từ thanh nav **👥 Nhân viên** trong admin:
+- Xem **danh sách nhân viên** (phân trang 20/trang) + tìm kiếm theo tên/CCCD/phòng ban/mã.
+- **Thêm / Sửa / Xoá** thông tin nhân viên (họ tên, CCCD, phòng ban, mã NV).
+- Nhân viên đã check-in được đánh dấu và **không cho xoá** (bảo toàn dữ liệu).
+
 ### Xuất dữ liệu & review ảnh
 - **⬇ CSV:** danh sách check-in (kèm cột link ảnh).
 - **🖼️ Báo cáo ảnh:** mở trang HTML lưới ảnh + thông tin từng người → bấm **In/Lưu PDF** để xuất.

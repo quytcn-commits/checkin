@@ -368,6 +368,73 @@ app.post('/api/admin/import-employees', requireAdmin, (req, res) => {
   res.json({ added, skipped, total: db.prepare('SELECT COUNT(*) c FROM employees').get().c, errors });
 });
 
+// ---------- API quản lý nhân viên ----------
+
+// Danh sách nhân viên (tìm kiếm + phân trang)
+app.get('/api/admin/employees', requireAdmin, (req, res) => {
+  const q = (req.query.search || '').trim();
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+  const offset = (page - 1) * limit;
+  const where = q ? 'WHERE e.name LIKE @q OR e.cccd LIKE @q OR e.department LIKE @q OR e.emp_code LIKE @q' : '';
+  const like = '%' + q + '%';
+  const total = q
+    ? db.prepare(`SELECT COUNT(*) c FROM employees e ${where}`).get({ q: like }).c
+    : db.prepare('SELECT COUNT(*) c FROM employees').get().c;
+  const sql = `
+    SELECT e.id, e.cccd, e.name, e.department, e.emp_code,
+      (SELECT COUNT(*) FROM checkins c WHERE c.employee_id = e.id) AS checked
+    FROM employees e ${where} ORDER BY e.name LIMIT @limit OFFSET @offset`;
+  const rows = q
+    ? db.prepare(sql).all({ q: like, limit, offset })
+    : db.prepare(sql).all({ limit, offset });
+  res.json({ total, page, limit, pages: Math.ceil(total / limit), rows });
+});
+
+// Thêm nhân viên
+app.post('/api/admin/employees', requireAdmin, (req, res) => {
+  const cccd = lib.normalizeCccd(req.body.cccd);
+  const name = (req.body.name || '').trim();
+  if (!lib.isValidCccd(cccd)) return res.status(400).json({ error: 'CCCD phải có 9 hoặc 12 số' });
+  if (!name) return res.status(400).json({ error: 'Thiếu họ tên' });
+  try {
+    const info = db.prepare('INSERT INTO employees (cccd, name, department, emp_code) VALUES (?,?,?,?)')
+      .run(cccd, name, (req.body.department || '').trim(), (req.body.emp_code || '').trim());
+    res.json({ id: info.lastInsertRowid });
+  } catch (e) {
+    if (String(e.message).includes('UNIQUE')) return res.status(409).json({ error: 'CCCD đã tồn tại trong danh sách' });
+    res.status(500).json({ error: 'Lỗi máy chủ' });
+  }
+});
+
+// Sửa nhân viên
+app.put('/api/admin/employees/:id', requireAdmin, (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const emp = db.prepare('SELECT id FROM employees WHERE id = ?').get(id);
+  if (!emp) return res.status(404).json({ error: 'Không tìm thấy nhân viên' });
+  const cccd = lib.normalizeCccd(req.body.cccd);
+  const name = (req.body.name || '').trim();
+  if (!lib.isValidCccd(cccd)) return res.status(400).json({ error: 'CCCD phải có 9 hoặc 12 số' });
+  if (!name) return res.status(400).json({ error: 'Thiếu họ tên' });
+  try {
+    db.prepare('UPDATE employees SET cccd=?, name=?, department=?, emp_code=? WHERE id=?')
+      .run(cccd, name, (req.body.department || '').trim(), (req.body.emp_code || '').trim(), id);
+    res.json({ ok: true });
+  } catch (e) {
+    if (String(e.message).includes('UNIQUE')) return res.status(409).json({ error: 'CCCD này đã thuộc nhân viên khác' });
+    res.status(500).json({ error: 'Lỗi máy chủ' });
+  }
+});
+
+// Xoá nhân viên
+app.delete('/api/admin/employees/:id', requireAdmin, (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const checked = db.prepare('SELECT id FROM checkins WHERE employee_id = ?').get(id);
+  if (checked) return res.status(400).json({ error: 'Nhân viên đã check-in — không thể xoá (để bảo toàn dữ liệu).' });
+  db.prepare('DELETE FROM employees WHERE id = ?').run(id);
+  res.json({ ok: true });
+});
+
 // ---------- API quay số ----------
 
 // Danh sách người hợp lệ chưa trúng (cho hiệu ứng cuộn tên)
