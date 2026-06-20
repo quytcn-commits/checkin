@@ -1,5 +1,11 @@
-# Caddy tự xin chứng chỉ SSL Let's Encrypt cho domain trong biến DOMAIN (.env)
+# --- Cấu hình cho domain ĐANG BẬT Cloudflare Proxy (đám mây cam) ---
+# Cloudflare lo cert HTTPS cho khách. Caddy chỉ cần cert tự ký (tls internal),
+# và đặt Cloudflare SSL/TLS mode = "Full" để Cloudflare chấp nhận cert này.
 {$DOMAIN} {
 	encode gzip
 	reverse_proxy app:3000
+	tls internal
 }
+
+# --- Nếu TẮT proxy Cloudflare (đám mây xám / DNS only) ---
+# Xoá dòng "tls internal" ở trên để Caddy tự xin SSL Let's Encrypt công khai.

@@ -98,15 +98,15 @@ cp .env.example .env
 nano .env     # đổi: ADMIN_PASSWORD, CCCD_SALT, EVENT_NAME, DOMAIN=checkin.congty.com
 ```
 
-### Bước 3 — Trỏ DNS + mở firewall
+### Bước 3 — Trỏ DNS + mở firewall + Cloudflare SSL
 - Tạo bản ghi **DNS A**: `checkin.congty.com → <IP VPS>`.
+- Nếu domain qua **Cloudflare và bật Proxy (đám mây cam)**: vào **SSL/TLS → Overview** đặt mode = **Full** (KHÔNG để Flexible). `Caddyfile` đã set sẵn `tls internal` cho trường hợp này.
 - Mở cổng **80** và **443** trên firewall.
-  - GCP (máy bạn đang dùng): vào VPC > Firewall, hoặc:
+  - GCP: cách nhanh nhất — VM > Edit > tích **Allow HTTP traffic** + **Allow HTTPS traffic**. Hoặc:
     ```bash
     gcloud compute firewall-rules create allow-http-https \
       --allow tcp:80,tcp:443 --direction INGRESS --network default
     ```
-    và gán tag/áp dụng cho VM, hoặc bật sẵn "Allow HTTP/HTTPS traffic" trong cài đặt VM.
 
 ### Bước 4 — Chạy
 ```bash
