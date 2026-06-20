@@ -314,6 +314,8 @@ app.post('/api/admin/import-excel', requireAdmin, (req, res) => {
       added: parsed.employees.length,
       skippedInactive: parsed.skippedInactive,
       skippedInvalid: parsed.skippedInvalid,
+      duplicates: parsed.duplicates,
+      invalid: parsed.invalid,
       sheet: parsed.sheet,
       sheets: parsed.sheets,
       total: db.prepare('SELECT COUNT(*) c FROM employees').get().c,

@@ -59,10 +59,13 @@ function parseEmployeesExcel(XLSX, wb, { sheet = DEFAULT_SHEET, onlyActive = tru
   const employees = [];
   let skippedInactive = 0;
   let skippedInvalid = 0;
+  const invalid = []; // chi tiết dòng lỗi để admin sửa
+  let duplicates = 0;
   for (let r = 1; r < rows.length; r++) {
     const row = rows[r];
     if (!row) continue;
-    const cccd = lib.normalizeCccd(row[idx.cccd]);
+    const rawCccd = String(row[idx.cccd] == null ? '' : row[idx.cccd]).trim();
+    const cccd = lib.normalizeCccd(rawCccd);
     const name = String(row[idx.name] == null ? '' : row[idx.name]).trim();
     if (!cccd && !name) continue; // dòng trống
     // Lọc người đã nghỉ (chỉ khi cột trạng thái có giá trị khác "active")
@@ -70,8 +73,15 @@ function parseEmployeesExcel(XLSX, wb, { sheet = DEFAULT_SHEET, onlyActive = tru
       const st = strip(row[idx.status]);
       if (st && st !== 'active') { skippedInactive++; continue; }
     }
-    if (!lib.isValidCccd(cccd) || !name) { skippedInvalid++; continue; }
-    if (seen.has(cccd)) continue;
+    if (!lib.isValidCccd(cccd) || !name) {
+      skippedInvalid++;
+      let reason = !name ? 'thiếu Họ tên'
+        : !rawCccd ? 'thiếu CCCD'
+        : `CCCD "${rawCccd}" không đúng (cần 9 hoặc 12 số, đang ${cccd.length} số)`;
+      if (invalid.length < 100) invalid.push({ row: r + 1, name, cccd: rawCccd, reason });
+      continue;
+    }
+    if (seen.has(cccd)) { duplicates++; continue; }
     seen.add(cccd);
 
     const dept =
@@ -80,7 +90,7 @@ function parseEmployeesExcel(XLSX, wb, { sheet = DEFAULT_SHEET, onlyActive = tru
     const emp_code = idx.empCode >= 0 ? String(row[idx.empCode] == null ? '' : row[idx.empCode]).trim() : '';
     employees.push({ cccd, name, department: dept, emp_code });
   }
-  return { employees, sheet: sheetName, sheets: wb.SheetNames, skippedInactive, skippedInvalid };
+  return { employees, sheet: sheetName, sheets: wb.SheetNames, skippedInactive, skippedInvalid, duplicates, invalid };
 }
 
 module.exports = { parseEmployeesExcel, DEFAULT_SHEET };

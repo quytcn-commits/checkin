@@ -16,7 +16,7 @@ if (!file) {
 }
 
 const wb = XLSX.readFile(path.resolve(file));
-const { employees, sheet: used, sheets, skippedInactive, skippedInvalid } = parseEmployeesExcel(XLSX, wb, { sheet });
+const { employees, sheet: used, sheets, skippedInactive, skippedInvalid, duplicates, invalid } = parseEmployeesExcel(XLSX, wb, { sheet });
 
 const upsert = db.prepare(`
   INSERT INTO employees (cccd, name, department, emp_code)
@@ -26,6 +26,10 @@ const upsert = db.prepare(`
 db.transaction(() => { for (const e of employees) upsert.run(e); })();
 
 console.log(`✅ Import Excel xong (sheet "${used}").`);
-console.log(`   Nhân viên hợp lệ: ${employees.length} · Bỏ qua nghỉ việc: ${skippedInactive} · CCCD lỗi/trùng đã loại: ${skippedInvalid}`);
+console.log(`   Nhân viên hợp lệ: ${employees.length} · Bỏ qua nghỉ việc: ${skippedInactive} · CCCD lỗi: ${skippedInvalid} · Trùng: ${duplicates}`);
+if (invalid && invalid.length) {
+  console.log('   ⚠️ Dòng lỗi cần sửa trong Excel:');
+  for (const x of invalid) console.log(`     - Dòng ${x.row}${x.name ? ' · ' + x.name : ''}: ${x.reason}`);
+}
 console.log(`   Sheet trong file: ${sheets.join(', ')}`);
 console.log(`   Tổng nhân viên trong DB: ${db.prepare('SELECT COUNT(*) c FROM employees').get().c}`);

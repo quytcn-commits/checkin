@@ -213,8 +213,16 @@ $('import-xlsx').addEventListener('change', async (e) => {
     e.target.value = '';
     return;
   }
-  $('import-msg').className = 'msg show ok';
-  $('import-msg').innerHTML = `Đã import <b>${data.added}</b> nhân viên từ sheet "<b>${data.sheet}</b>" · Bỏ qua nghỉ việc: ${data.skippedInactive} · CCCD lỗi: ${data.skippedInvalid} · Tổng: <b>${data.total}</b>`;
+  let html = `Đã import <b>${data.added}</b> nhân viên từ sheet "<b>${data.sheet}</b>" · Bỏ qua nghỉ việc: ${data.skippedInactive} · CCCD lỗi: ${data.skippedInvalid}${data.duplicates ? ' · Trùng CCCD: ' + data.duplicates : ''} · Tổng: <b>${data.total}</b>`;
+  if (data.invalid && data.invalid.length) {
+    html += '<br><b>Dòng lỗi cần sửa trong Excel:</b><ul style="margin:6px 0 0;padding-left:18px">' +
+      data.invalid.map((x) => `<li>Dòng ${x.row}${x.name ? ' · ' + x.name : ''}: ${x.reason}</li>`).join('') +
+      '</ul>';
+    $('import-msg').className = 'msg show info';
+  } else {
+    $('import-msg').className = 'msg show ok';
+  }
+  $('import-msg').innerHTML = html;
   e.target.value = '';
   loadAll();
 });
