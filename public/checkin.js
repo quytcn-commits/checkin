@@ -149,12 +149,18 @@ $('btn-retake').addEventListener('click', () => {
 // ---------- Bước 3: GPS + gửi ----------
 function getGps() {
   $('btn-gps-retry').classList.add('hidden');
+  // geofence tắt -> GPS không bắt buộc: cho gửi ngay, lấy GPS nền để lưu nếu được
+  const optional = !state.geofenceEnabled;
+  if (optional) $('btn-submit').disabled = false;
+
   if (!navigator.geolocation) {
-    showMsg($('gps-status'), 'err', 'Thiết bị không hỗ trợ GPS. Vẫn bấm "Gửi check-in" được nhé.');
+    showMsg($('gps-status'), optional ? 'info' : 'err',
+      optional ? 'GPS không bắt buộc — bạn có thể bấm "Gửi check-in".' : 'Thiết bị không hỗ trợ GPS.');
     $('btn-submit').disabled = false;
     return;
   }
-  showMsg($('gps-status'), 'info', '<span class="spinner"></span> Đang lấy vị trí GPS...');
+  showMsg($('gps-status'), 'info',
+    `<span class="spinner"></span> Đang lấy vị trí GPS${optional ? ' (không bắt buộc, có thể gửi luôn)' : ''}...`);
   navigator.geolocation.getCurrentPosition(
     (pos) => {
       state.lat = pos.coords.latitude;
@@ -165,6 +171,12 @@ function getGps() {
     },
     (err) => {
       const inApp = isInAppBrowser();
+      if (optional) {
+        // Không bắt buộc: thông báo nhẹ, không cần thử lại gì
+        showMsg($('gps-status'), 'info', 'Bỏ qua vị trí cũng được — bạn cứ bấm <b>"Gửi check-in"</b>.');
+        $('btn-submit').disabled = false;
+        return;
+      }
       let msg = 'Không lấy được GPS. ';
       if (err.code === 1) {
         msg += inApp
