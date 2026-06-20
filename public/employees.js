@@ -1,7 +1,7 @@
 'use strict';
 const $ = (id) => document.getElementById(id);
 let PW = localStorage.getItem('admin_pw') || '';
-let page = 1, search = '', editingId = null, pages = 1;
+let page = 1, search = '', editingId = null, pages = 1, dept = '', checked = '';
 
 function authHeaders() { return { 'x-admin-password': PW, 'Content-Type': 'application/json' }; }
 async function tryLogin(pw) {
@@ -21,11 +21,20 @@ $('pw').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btn-login
 function showDash() {
   $('login').classList.add('hidden');
   $('dash').classList.remove('hidden');
+  loadDepartments();
   load();
+}
+
+async function loadDepartments() {
+  const rows = await fetch('/api/admin/departments', { headers: authHeaders() }).then((r) => r.json());
+  $('f-dept').innerHTML = '<option value="">📁 Tất cả phòng ban</option>' +
+    rows.map((d) => `<option value="${esc(d.name)}">${esc(d.name)} (${d.c})</option>`).join('');
 }
 
 async function load() {
   const params = new URLSearchParams({ search, page, limit: 20 });
+  if (dept) params.set('department', dept);
+  if (checked) params.set('checked', checked);
   const data = await fetch('/api/admin/employees?' + params, { headers: authHeaders() }).then((r) => r.json());
   pages = data.pages || 1;
   $('count').textContent = `(${data.total})`;
@@ -59,6 +68,26 @@ let searchTimer;
 $('search').addEventListener('input', () => {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(() => { search = $('search').value.trim(); page = 1; load(); }, 300);
+});
+
+// Lọc theo phòng ban
+$('f-dept').addEventListener('change', () => { dept = $('f-dept').value; page = 1; load(); });
+
+// Lọc theo trạng thái check-in
+$('f-checked').querySelectorAll('button').forEach((b) => {
+  b.addEventListener('click', () => {
+    $('f-checked').querySelectorAll('button').forEach((x) => x.classList.remove('active'));
+    b.classList.add('active');
+    checked = b.dataset.v; page = 1; load();
+  });
+});
+
+// Xoá toàn bộ bộ lọc
+$('btn-clear').addEventListener('click', () => {
+  search = ''; dept = ''; checked = ''; page = 1;
+  $('search').value = ''; $('f-dept').value = '';
+  $('f-checked').querySelectorAll('button').forEach((x) => x.classList.toggle('active', x.dataset.v === ''));
+  load();
 });
 
 // ===== Modal =====

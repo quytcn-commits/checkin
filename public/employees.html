@@ -35,6 +35,13 @@
 
     <div class="toolbar">
       <input type="text" id="search" placeholder="🔍 Tìm theo tên / CCCD / phòng ban / mã NV..." />
+      <select id="f-dept" class="filter-select"><option value="">📁 Tất cả phòng ban</option></select>
+      <div class="seg" id="f-checked">
+        <button data-v="" class="active">Tất cả</button>
+        <button data-v="1">✅ Đã check-in</button>
+        <button data-v="0">⬜ Chưa</button>
+      </div>
+      <button class="btn secondary" style="width:auto;margin:0;padding:9px 14px" id="btn-clear">Xoá lọc</button>
     </div>
 
     <div id="list"></div>

@@ -370,24 +370,37 @@ app.post('/api/admin/import-employees', requireAdmin, (req, res) => {
 
 // ---------- API quản lý nhân viên ----------
 
-// Danh sách nhân viên (tìm kiếm + phân trang)
+// Danh sách phòng ban (cho bộ lọc)
+app.get('/api/admin/departments', requireAdmin, (req, res) => {
+  const rows = db.prepare(
+    "SELECT department AS name, COUNT(*) c FROM employees WHERE department <> '' GROUP BY department ORDER BY c DESC, department"
+  ).all();
+  res.json(rows);
+});
+
+// Danh sách nhân viên (tìm kiếm + lọc + phân trang)
 app.get('/api/admin/employees', requireAdmin, (req, res) => {
   const q = (req.query.search || '').trim();
+  const dept = (req.query.department || '').trim();
+  const checked = String(req.query.checked || ''); // '1' đã check-in, '0' chưa, '' tất cả
   const page = Math.max(1, parseInt(req.query.page, 10) || 1);
   const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
   const offset = (page - 1) * limit;
-  const where = q ? 'WHERE e.name LIKE @q OR e.cccd LIKE @q OR e.department LIKE @q OR e.emp_code LIKE @q' : '';
-  const like = '%' + q + '%';
-  const total = q
-    ? db.prepare(`SELECT COUNT(*) c FROM employees e ${where}`).get({ q: like }).c
-    : db.prepare('SELECT COUNT(*) c FROM employees').get().c;
-  const sql = `
+
+  const conds = [];
+  const fp = {}; // params cho phần lọc
+  if (q) { conds.push('(e.name LIKE @q OR e.cccd LIKE @q OR e.department LIKE @q OR e.emp_code LIKE @q)'); fp.q = '%' + q + '%'; }
+  if (dept) { conds.push('e.department = @dept'); fp.dept = dept; }
+  if (checked === '1') conds.push('EXISTS (SELECT 1 FROM checkins c WHERE c.employee_id = e.id)');
+  if (checked === '0') conds.push('NOT EXISTS (SELECT 1 FROM checkins c WHERE c.employee_id = e.id)');
+  const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
+
+  const total = db.prepare(`SELECT COUNT(*) c FROM employees e ${where}`).get(fp).c;
+  const rows = db.prepare(`
     SELECT e.id, e.cccd, e.name, e.department, e.emp_code,
       (SELECT COUNT(*) FROM checkins c WHERE c.employee_id = e.id) AS checked
-    FROM employees e ${where} ORDER BY e.name LIMIT @limit OFFSET @offset`;
-  const rows = q
-    ? db.prepare(sql).all({ q: like, limit, offset })
-    : db.prepare(sql).all({ limit, offset });
+    FROM employees e ${where} ORDER BY e.name LIMIT @limit OFFSET @offset`
+  ).all({ ...fp, limit, offset });
   res.json({ total, page, limit, pages: Math.ceil(total / limit), rows });
 });
 
