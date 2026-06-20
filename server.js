@@ -2,9 +2,11 @@
 const path = require('path');
 const fs = require('fs');
 const express = require('express');
+const XLSX = require('xlsx');
 const config = require('./config');
 const { db, UPLOAD_DIR } = require('./db');
 const lib = require('./lib');
+const { parseEmployeesExcel, DEFAULT_SHEET } = require('./lib-excel');
 
 const app = express();
 app.set('trust proxy', true); // lấy đúng IP khi chạy sau reverse proxy / tunnel
@@ -184,6 +186,36 @@ app.get('/api/admin/export', requireAdmin, (req, res) => {
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', 'attachment; filename="checkins.csv"');
   res.send('﻿' + lines.join('\n'));
+});
+
+// Import danh sách nhân viên từ Excel (.xlsx) - mặc định sheet "Chốt"
+app.post('/api/admin/import-excel', requireAdmin, (req, res) => {
+  try {
+    const { fileBase64, sheet } = req.body;
+    if (!fileBase64) return res.status(400).json({ error: 'Thiếu file Excel' });
+    const buf = Buffer.from(String(fileBase64).split(',').pop(), 'base64');
+    const wb = XLSX.read(buf, { type: 'buffer' });
+    const parsed = parseEmployeesExcel(XLSX, wb, { sheet: sheet || DEFAULT_SHEET });
+    if (!parsed.employees.length) {
+      return res.status(400).json({ error: `Không đọc được nhân sự từ sheet "${parsed.sheet}".`, sheets: parsed.sheets });
+    }
+    const upsert = db.prepare(`
+      INSERT INTO employees (cccd, name, department, emp_code)
+      VALUES (@cccd, @name, @department, @emp_code)
+      ON CONFLICT(cccd) DO UPDATE SET name=excluded.name, department=excluded.department, emp_code=excluded.emp_code
+    `);
+    db.transaction(() => { for (const e of parsed.employees) upsert.run(e); })();
+    res.json({
+      added: parsed.employees.length,
+      skippedInactive: parsed.skippedInactive,
+      skippedInvalid: parsed.skippedInvalid,
+      sheet: parsed.sheet,
+      sheets: parsed.sheets,
+      total: db.prepare('SELECT COUNT(*) c FROM employees').get().c,
+    });
+  } catch (e) {
+    res.status(400).json({ error: e.message || 'Lỗi đọc file Excel' });
+  }
 });
 
 // Import danh sách nhân viên từ CSV (cột: cccd,name,department,emp_code)

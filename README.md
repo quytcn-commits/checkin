@@ -18,10 +18,18 @@ cp .env.example .env      # rồi mở .env đổi mật khẩu, tên sự kiệ
 
 ## 2. Import danh sách nhân viên
 
-File CSV cần cột: `cccd,name,department,emp_code` (xem `employees.sample.csv`).
+Hỗ trợ **Excel (.xlsx)** và **CSV**.
 
-Hai cách:
-- **Qua web:** vào `/admin.html` → nút **Import nhân viên (CSV)**.
+### Excel (.xlsx) — khuyến nghị
+Đọc theo mẫu danh sách công ty. Mặc định lấy sheet **"Chốt"**. Tự nhận cột:
+`Số CMND/ CCCD`, `Mã nhân viên`, `Họ và tên`, `Phòng ban cấp 1`, `Chức vụ`,
+`Tình trạng công tác` (bỏ qua người đã nghỉ), `Khối nhân viên`.
+- **Qua web:** `/admin.html` → nút **Import Excel (.xlsx)** (ô bên cạnh nhập tên sheet nếu khác "Chốt").
+- **Qua CLI:** `node scripts/import-excel.js "duong-dan.xlsx"` (thêm tên sheet ở cuối nếu cần: `... "Chốt"`).
+
+### CSV
+File cần cột: `cccd,name,department,emp_code` (xem `employees.sample.csv`).
+- **Qua web:** `/admin.html` → nút **Import CSV**.
 - **Qua CLI:** `node scripts/import-employees.js employees.sample.csv`
 
 ## 3. Chạy server
@@ -116,9 +124,10 @@ docker compose logs -f        # xem log, Ctrl+C để thoát
 Truy cập `https://checkin.congty.com` — Caddy tự lấy chứng chỉ trong ~30 giây.
 
 ### Bước 5 — Import nhân viên
+Cách nhanh nhất: vào `/admin.html` → **Import Excel (.xlsx)** → chọn file danh sách (sheet "Chốt").
+Hoặc upload file Excel vào `./data/` trên VPS rồi chạy:
 ```bash
-docker compose exec app node scripts/import-employees.js employees.sample.csv
-# hoặc dùng trang /admin.html > Import nhân viên (CSV)
+docker compose exec app node scripts/import-excel.js "data/ten-file.xlsx"
 ```
 
 ### Lệnh vận hành

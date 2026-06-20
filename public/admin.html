@@ -37,8 +37,13 @@
     <div class="toolbar">
       <input type="text" id="search" placeholder="🔍 Tìm theo tên / phòng ban / 4 số cuối..." />
       <button class="btn" id="btn-export">⬇ Xuất CSV</button>
+      <label class="btn" style="width:auto;margin:0;padding:10px 16px;cursor:pointer">
+        ⬆ Import Excel (.xlsx)
+        <input type="file" id="import-xlsx" accept=".xlsx,.xls" class="hidden" />
+      </label>
+      <input type="text" id="sheet-name" placeholder='Sheet (mặc định "Chốt")' style="width:auto;flex:0 0 180px" />
       <label class="btn secondary" style="width:auto;margin:0;padding:10px 16px;cursor:pointer">
-        ⬆ Import nhân viên (CSV)
+        ⬆ Import CSV
         <input type="file" id="import-file" accept=".csv,text/csv" class="hidden" />
       </label>
     </div>

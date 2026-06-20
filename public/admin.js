@@ -102,6 +102,34 @@ $('import-file').addEventListener('change', async (e) => {
   loadAll();
 });
 
+// Import Excel (.xlsx) - đọc file thành base64 gửi server
+$('import-xlsx').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  $('import-msg').className = 'msg show info';
+  $('import-msg').textContent = 'Đang đọc Excel...';
+  const fileBase64 = await new Promise((resolve) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(fr.result);
+    fr.readAsDataURL(file);
+  });
+  const sheet = $('sheet-name').value.trim();
+  const res = await fetch('/api/admin/import-excel', {
+    method: 'POST', headers: authHeaders(), body: JSON.stringify({ fileBase64, sheet }),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    $('import-msg').className = 'msg show err';
+    $('import-msg').innerHTML = (data.error || 'Lỗi import') + (data.sheets ? `<br><span class="small">Các sheet: ${data.sheets.join(', ')}</span>` : '');
+    e.target.value = '';
+    return;
+  }
+  $('import-msg').className = 'msg show ok';
+  $('import-msg').innerHTML = `Đã import <b>${data.added}</b> nhân viên từ sheet "<b>${data.sheet}</b>" · Bỏ qua nghỉ việc: ${data.skippedInactive} · CCCD lỗi: ${data.skippedInvalid} · Tổng: <b>${data.total}</b>`;
+  e.target.value = '';
+  loadAll();
+});
+
 // Modal xem ảnh
 document.addEventListener('click', (e) => {
   if (e.target.classList.contains('thumb')) {
