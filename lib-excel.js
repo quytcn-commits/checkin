@@ -55,11 +55,12 @@ function parseEmployeesExcel(XLSX, wb, { sheet = DEFAULT_SHEET, onlyActive = tru
     throw new Error('File thiếu cột "Số CMND/CCCD" hoặc "Họ và tên" (kiểm tra dòng tiêu đề).');
   }
 
-  const seen = new Set();
+  const seen = new Map(); // cccd -> { row, name } (lần xuất hiện đầu, được giữ)
   const employees = [];
   let skippedInactive = 0;
   let skippedInvalid = 0;
   const invalid = []; // chi tiết dòng lỗi để admin sửa
+  const duplicateList = []; // chi tiết các dòng trùng CCCD
   let duplicates = 0;
   for (let r = 1; r < rows.length; r++) {
     const row = rows[r];
@@ -81,8 +82,20 @@ function parseEmployeesExcel(XLSX, wb, { sheet = DEFAULT_SHEET, onlyActive = tru
       if (invalid.length < 100) invalid.push({ row: r + 1, name, cccd: rawCccd, reason });
       continue;
     }
-    if (seen.has(cccd)) { duplicates++; continue; }
-    seen.add(cccd);
+    if (seen.has(cccd)) {
+      duplicates++;
+      const first = seen.get(cccd);
+      if (duplicateList.length < 500) {
+        duplicateList.push({
+          cccd: rawCccd,
+          row: r + 1, name,
+          firstRow: first.row, firstName: first.name,
+          sameName: strip(name) === strip(first.name),
+        });
+      }
+      continue;
+    }
+    seen.set(cccd, { row: r + 1, name });
 
     const dept =
       (idx.dept1 >= 0 ? String(row[idx.dept1] == null ? '' : row[idx.dept1]).trim() : '') ||
@@ -90,7 +103,7 @@ function parseEmployeesExcel(XLSX, wb, { sheet = DEFAULT_SHEET, onlyActive = tru
     const emp_code = idx.empCode >= 0 ? String(row[idx.empCode] == null ? '' : row[idx.empCode]).trim() : '';
     employees.push({ cccd, name, department: dept, emp_code });
   }
-  return { employees, sheet: sheetName, sheets: wb.SheetNames, skippedInactive, skippedInvalid, duplicates, invalid };
+  return { employees, sheet: sheetName, sheets: wb.SheetNames, skippedInactive, skippedInvalid, duplicates, invalid, duplicateList };
 }
 
 module.exports = { parseEmployeesExcel, DEFAULT_SHEET };

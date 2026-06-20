@@ -213,19 +213,42 @@ $('import-xlsx').addEventListener('change', async (e) => {
     e.target.value = '';
     return;
   }
+  LAST_DUP = data.duplicateList || [];
   let html = `Đã import <b>${data.added}</b> nhân viên từ sheet "<b>${data.sheet}</b>" · Bỏ qua nghỉ việc: ${data.skippedInactive} · CCCD lỗi: ${data.skippedInvalid}${data.duplicates ? ' · Trùng CCCD: ' + data.duplicates : ''} · Tổng: <b>${data.total}</b>`;
   if (data.invalid && data.invalid.length) {
     html += '<br><b>Dòng lỗi cần sửa trong Excel:</b><ul style="margin:6px 0 0;padding-left:18px">' +
       data.invalid.map((x) => `<li>Dòng ${x.row}${x.name ? ' · ' + x.name : ''}: ${x.reason}</li>`).join('') +
       '</ul>';
-    $('import-msg').className = 'msg show info';
-  } else {
-    $('import-msg').className = 'msg show ok';
   }
+  if (LAST_DUP.length) {
+    const diff = LAST_DUP.filter((x) => !x.sameName);
+    html += `<br><b>Trùng CCCD (${LAST_DUP.length}) — đã tự giữ bản đầu:</b> ` +
+      `<button onclick="downloadDup()" style="font:inherit;padding:4px 10px;border-radius:8px;border:1px solid #cbd2e1;background:#fff;cursor:pointer">⬇ Tải CSV trùng</button>`;
+    if (diff.length) html += `<br><span style="color:#b91c1c"><b>⚠️ ${diff.length} cặp TRÙNG KHÁC TÊN cần kiểm tra gấp.</b></span>`;
+    html += '<div style="max-height:200px;overflow:auto;margin-top:6px;font-size:12px;line-height:1.7">' +
+      LAST_DUP.map((x) => `<div${x.sameName ? '' : ' style="color:#b91c1c;font-weight:600"'}>CCCD ${x.cccd}: dòng ${x.firstRow} "${x.firstName}" ↔ dòng ${x.row} "${x.name}"${x.sameName ? '' : ' ⚠️ khác tên'}</div>`).join('') +
+      '</div>';
+  }
+  $('import-msg').className = 'msg show info';
   $('import-msg').innerHTML = html;
   e.target.value = '';
   loadAll();
 });
+
+// Tải danh sách trùng CCCD ra CSV
+let LAST_DUP = [];
+window.downloadDup = function () {
+  if (!LAST_DUP.length) return;
+  const esc = (v) => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
+  const header = ['cccd', 'dong_giu', 'ten_giu', 'dong_trung', 'ten_trung', 'khac_ten'];
+  const lines = [header.join(',')];
+  for (const x of LAST_DUP) lines.push([x.cccd, x.firstRow, x.firstName, x.row, x.name, x.sameName ? 'không' : 'CÓ'].map(esc).join(','));
+  const blob = new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'trung-cccd.csv';
+  a.click();
+};
 
 // ===== Import CSV =====
 $('import-file').addEventListener('change', async (e) => {

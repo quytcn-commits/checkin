@@ -16,7 +16,7 @@ if (!file) {
 }
 
 const wb = XLSX.readFile(path.resolve(file));
-const { employees, sheet: used, sheets, skippedInactive, skippedInvalid, duplicates, invalid } = parseEmployeesExcel(XLSX, wb, { sheet });
+const { employees, sheet: used, sheets, skippedInactive, skippedInvalid, duplicates, invalid, duplicateList } = parseEmployeesExcel(XLSX, wb, { sheet });
 
 const upsert = db.prepare(`
   INSERT INTO employees (cccd, name, department, emp_code)
@@ -30,6 +30,14 @@ console.log(`   Nhân viên hợp lệ: ${employees.length} · Bỏ qua nghỉ v
 if (invalid && invalid.length) {
   console.log('   ⚠️ Dòng lỗi cần sửa trong Excel:');
   for (const x of invalid) console.log(`     - Dòng ${x.row}${x.name ? ' · ' + x.name : ''}: ${x.reason}`);
+}
+if (duplicateList && duplicateList.length) {
+  const diff = duplicateList.filter((x) => !x.sameName);
+  if (diff.length) {
+    console.log('   ⚠️ TRÙNG CCCD KHÁC TÊN (kiểm tra gấp):');
+    for (const x of diff) console.log(`     - CCCD ${x.cccd}: dòng ${x.firstRow} "${x.firstName}" ↔ dòng ${x.row} "${x.name}"`);
+  }
+  console.log(`   Trùng CCCD cùng tên (giữ bản đầu): ${duplicateList.length - diff.length} dòng`);
 }
 console.log(`   Sheet trong file: ${sheets.join(', ')}`);
 console.log(`   Tổng nhân viên trong DB: ${db.prepare('SELECT COUNT(*) c FROM employees').get().c}`);
