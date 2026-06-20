@@ -7,29 +7,11 @@ services:
       - PORT=3000
     volumes:
       - ./data:/app/data        # giữ DB + ảnh trên ổ đĩa VPS (không mất khi rebuild)
-    expose:
-      - "3000"
-    # Nếu KHÔNG dùng Caddy (chỉ test HTTP), bỏ comment dòng dưới để mở port trực tiếp.
-    # LƯU Ý: HTTP thì camera/GPS sẽ KHÔNG chạy trên điện thoại.
-    # ports:
-    #   - "3000:3000"
-
-  # Reverse proxy + tự động cấp SSL (Let's Encrypt). Cần 1 domain trỏ về IP VPS.
-  caddy:
-    image: caddy:2-alpine
-    restart: unless-stopped
-    depends_on:
-      - app
     ports:
-      - "80:80"
-      - "443:443"
-    environment:
-      - DOMAIN=${DOMAIN}
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
+      # Cloudflare (SSL mode = Flexible) nối tới origin qua HTTP cổng 80.
+      # Trình duyệt vẫn thấy HTTPS nhờ chứng chỉ Cloudflare ở edge → camera/GPS chạy bình thường.
+      - "80:3000"
 
-volumes:
-  caddy_data:
-  caddy_config:
+# Ghi chú: phương án này khớp với cấu hình sinhnhat (Flexible + origin HTTP).
+# Nếu sau này muốn mã hoá luôn chặng Cloudflare↔VPS: dùng Cloudflare Origin
+# Certificate + Caddy/nginx phục vụ 443 và đặt rule SSL = Full (strict).
