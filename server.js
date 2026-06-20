@@ -224,6 +224,28 @@ app.get('/api/admin/checkins', requireAdmin, (req, res) => {
   res.json(rows);
 });
 
+// Xoá 1 check-in (để nhân viên check-in lại). Gỡ cả ảnh + kết quả trúng (nếu có).
+app.delete('/api/admin/checkins/:id', requireAdmin, (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const row = db.prepare('SELECT photo_path FROM checkins WHERE id = ?').get(id);
+  if (!row) return res.status(404).json({ error: 'Không tìm thấy check-in' });
+  db.prepare('DELETE FROM draw_winners WHERE checkin_id = ?').run(id);
+  db.prepare('DELETE FROM checkins WHERE id = ?').run(id);
+  if (row.photo_path) { try { fs.unlinkSync(path.join(UPLOAD_DIR, row.photo_path)); } catch (e) {} }
+  res.json({ ok: true });
+});
+
+// Xoá TẤT CẢ check-in (reset sau khi test). Không đụng tới danh sách nhân viên.
+app.delete('/api/admin/checkins', requireAdmin, (req, res) => {
+  const rows = db.prepare('SELECT photo_path FROM checkins').all();
+  db.prepare('DELETE FROM draw_winners').run();
+  db.prepare('DELETE FROM checkins').run();
+  for (const r of rows) {
+    if (r.photo_path) { try { fs.unlinkSync(path.join(UPLOAD_DIR, r.photo_path)); } catch (e) {} }
+  }
+  res.json({ ok: true, deleted: rows.length });
+});
+
 // Export CSV (kèm cột link ảnh)
 app.get('/api/admin/export', requireAdmin, (req, res) => {
   const rows = db.prepare(`

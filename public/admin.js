@@ -84,6 +84,7 @@ function renderTable() {
       <td class="small">${r.ip || ''}</td>
       <td class="small">${dev}</td>
       <td><span class="pill ${r.is_valid ? 'ok' : 'no'}">${r.is_valid ? 'Hợp lệ' : 'Không'}</span></td>
+      <td><button class="btn-sm btn-del btn-del-checkin" data-id="${r.id}" data-name="${encodeURIComponent(r.name || '')}">🗑️</button></td>
     </tr>`;
   }).join('');
 }
@@ -98,6 +99,7 @@ function renderGallery() {
         <div class="gln">${r.department || ''}</div>
         <div class="gln">${(r.checkin_time || '').replace('T', ' ')}</div>
         <div class="gln">${r.lat != null ? (r.gps_valid ? '📍 trong vùng' : '⚠️ ngoài vùng') : 'GPS —'}</div>
+        <button class="btn-sm btn-del btn-del-checkin" style="margin-top:6px" data-id="${r.id}" data-name="${encodeURIComponent(r.name || '')}">🗑️ Xoá để check-in lại</button>
       </div>
     </div>`).join('');
 }
@@ -269,8 +271,30 @@ $('import-file').addEventListener('change', async (e) => {
   loadAll();
 });
 
-// Modal xem ảnh
+// Xoá 1 check-in để nhân viên check-in lại
+async function delCheckin(id, name) {
+  if (!confirm(`Xoá check-in của "${name}"?\nNhân viên này sẽ được phép check-in lại từ đầu.`)) return;
+  const res = await fetch('/api/admin/checkins/' + id, { method: 'DELETE', headers: authHeaders() });
+  const data = await res.json();
+  if (!res.ok) { alert(data.error || 'Xoá thất bại'); return; }
+  loadAll();
+}
+
+// Xoá tất cả check-in (reset sau khi test)
+$('btn-reset-all').addEventListener('click', async () => {
+  if (!confirm('⚠️ XOÁ TẤT CẢ check-in?\nDùng để reset sau khi test. KHÔNG xoá danh sách nhân viên. Hành động không thể hoàn tác.')) return;
+  if (!confirm('Chắc chắn xoá HẾT check-in chứ? Bấm OK để xác nhận lần cuối.')) return;
+  const res = await fetch('/api/admin/checkins', { method: 'DELETE', headers: authHeaders() });
+  const data = await res.json();
+  if (!res.ok) { alert(data.error || 'Lỗi'); return; }
+  alert(`Đã xoá ${data.deleted} check-in. Mọi người có thể check-in lại.`);
+  loadAll();
+});
+
+// Modal xem ảnh + nút xoá check-in (delegation)
 document.addEventListener('click', (e) => {
+  const del = e.target.closest('.btn-del-checkin');
+  if (del) { delCheckin(del.dataset.id, decodeURIComponent(del.dataset.name || '')); return; }
   if (e.target.classList.contains('thumb')) {
     $('modal-img-el').src = e.target.dataset.full;
     $('modal').classList.add('show');

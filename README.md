@@ -64,6 +64,11 @@ Vào `/admin.html` → nút **⚙️ Cài đặt** (lưu vào DB, áp dụng nga
 
 Các giá trị `GEOFENCE_*` trong `.env` chỉ là **mặc định ban đầu**; cài trong admin sẽ ghi đè. GPS luôn được lưu dù bật/tắt.
 
+### Xoá check-in để check-in lại
+Khi nhân viên check-in lỗi (ảnh hỏng, nhầm…):
+- Mỗi dòng/thẻ trong admin có nút **🗑️ Xoá** → nhân viên đó được check-in lại từ đầu (gỡ cả ảnh + kết quả trúng nếu có).
+- Nút **🗑️ Xoá hết check-in** (góc trên) để **reset toàn bộ sau khi test** — không đụng tới danh sách nhân viên.
+
 ### Quản lý nhân viên (`/employees.html`)
 Vào từ thanh nav **👥 Nhân viên** trong admin:
 - Xem **danh sách nhân viên** (phân trang 20/trang) + tìm kiếm theo tên/CCCD/phòng ban/mã.
