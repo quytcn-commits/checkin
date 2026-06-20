@@ -1,0 +1,154 @@
+/* ===== Check-in NewWay Realty — theme theo trang login (design-src: sinhnhat) ===== */
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body {
+  margin: 0; padding: 0;
+  font-family: "Be Vietnam Pro", system-ui, -apple-system, sans-serif;
+  color: #fff;
+  overflow-x: hidden;
+  min-height: 100vh;
+  background: radial-gradient(
+    96.73% 144.54% at 26.39% 0%,
+    #0b5627 0%, #09240f 52.45%, #09240f 71.19%, #001701 84.94%, #000e00 100%
+  );
+}
+
+/* Nền cảnh (rays + skyline + cube) phủ đáy màn */
+.nw-bgm {
+  position: fixed; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; object-position: center bottom;
+  z-index: 0; pointer-events: none; opacity: 0.95;
+}
+
+/* Header thương hiệu trên cùng (mọi bước) */
+.nw-top {
+  position: relative; z-index: 2;
+  display: flex; flex-direction: column; align-items: center; gap: 7px;
+  padding: 20px 16px 4px;
+}
+.nw-top .mark { height: 40px; }
+.nw-top .txt { height: 11px; }
+.nw-topname {
+  margin-top: 4px; font-size: 13px; font-weight: 600; letter-spacing: 0.06em;
+  color: #cfeed8; text-transform: uppercase; text-align: center;
+}
+
+.nw-app {
+  position: relative; z-index: 1;
+  max-width: 460px; margin: 0 auto; padding: 8px 18px 56px;
+}
+
+/* Hero (chỉ bước nhập CCCD) */
+.nw-hero { display: flex; flex-direction: column; align-items: center; margin: 6px 0 18px; }
+.nw-fight { width: 92%; max-width: 360px; height: auto; }
+.nw-sub {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 92%; max-width: 360px; margin: 8px 0 0;
+}
+.nw-badge { height: 38px; }
+.nw-tagline {
+  color: #fff; font-weight: 600; font-size: 11px; line-height: 1.44;
+  letter-spacing: 0.005em; text-align: right;
+}
+
+/* Card viền gradient xanh phát sáng (như login-card) */
+.nw-card {
+  position: relative; width: 100%; box-sizing: border-box;
+  display: flex; flex-direction: column; gap: 16px;
+  padding: 24px; border-radius: 16px;
+  border: 1.5px solid transparent;
+  background:
+    linear-gradient(rgba(0,0,0,0.32), rgba(0,0,0,0.32)) padding-box,
+    linear-gradient(150deg, #59d06e 0%, rgba(89,208,110,0.5) 18%, rgba(89,208,110,0.12) 45%, rgba(89,208,110,0.45) 100%) border-box;
+  box-shadow: 0 4px 60px rgba(64,197,95,0.3);
+}
+
+.nw-card-title { font-size: 17px; font-weight: 700; color: #fff; margin: 0; }
+.nw-card-sub { font-size: 13px; color: #bfe6cb; margin: -8px 0 0; line-height: 1.5; }
+.nw-card-label {
+  color: #64c686; font-weight: 600; font-size: 14px; line-height: 1.5;
+  letter-spacing: 0.005em;
+}
+.nw-card-label b { color: #ff8a8a; }
+
+/* Ô nhập có icon (login-field) */
+.nw-field {
+  display: flex; align-items: center; gap: 12px;
+  height: 54px; padding: 0 14px;
+  background: rgba(0,0,0,0.3); border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.nw-field svg { flex: none; width: 22px; height: 22px; color: #cfeed8; }
+.nw-field input {
+  flex: 1; min-width: 0; background: none; border: none; outline: none;
+  color: #fff; font-size: 16px; font-family: inherit; letter-spacing: 1px;
+}
+.nw-field input::placeholder { color: #9bb4a6; letter-spacing: 0; }
+
+/* Đồng ý điều khoản */
+.nw-consent {
+  display: flex; gap: 10px; align-items: flex-start;
+  font-size: 12.5px; color: #bfe6cb; line-height: 1.5;
+}
+.nw-consent input { width: 20px; height: 20px; margin-top: 1px; accent-color: #2db64f; flex: none; }
+
+/* Nút chính (login-btn) */
+.nw-btn {
+  height: 54px; width: 100%; border: none; border-radius: 10px;
+  background: radial-gradient(85.07% 171.42% at 50% -28.57%, #64c686 0%, #46a065 45.77%, #19492a 100%);
+  color: #fcfcfc; font-weight: 600; font-size: 16px; letter-spacing: 0.04em;
+  text-transform: uppercase; font-family: inherit; cursor: pointer;
+}
+.nw-btn:disabled { opacity: 0.7; cursor: default; }
+.nw-btn.secondary {
+  background: rgba(255,255,255,0.08); color: #cfeed8;
+  border: 1px solid rgba(100,198,134,0.45); text-transform: none; font-weight: 600;
+}
+.nw-btn.ghost {
+  background: none; color: #bfe6cb; border: 1px solid rgba(255,255,255,0.2);
+  text-transform: none; font-weight: 500;
+}
+
+/* Thông báo (checkin.js dùng class .msg .show .err/.ok/.info) */
+.msg { padding: 11px 14px; border-radius: 10px; font-size: 13.5px; display: none; line-height: 1.5; }
+.msg.show { display: block; }
+.msg.err  { background: rgba(255,84,112,0.16); color: #ffc2cd; border: 1px solid rgba(255,84,112,0.35); }
+.msg.ok   { background: rgba(45,182,79,0.18);  color: #b9f3c9; border: 1px solid rgba(89,208,110,0.4); }
+.msg.info { background: rgba(100,198,134,0.14); color: #d6f5e0; border: 1px solid rgba(100,198,134,0.3); }
+
+/* Camera / ảnh */
+video, #preview {
+  width: 100%; border-radius: 12px; background: #000; display: block;
+  aspect-ratio: 3/4; object-fit: cover;
+}
+#preview { object-fit: contain; }
+#preview2 { width: 100%; border-radius: 12px; margin-bottom: 4px; }
+
+.hello { font-size: 14px; color: #d6f5e0; line-height: 1.5; }
+.hello b { color: #64c686; }
+
+/* Màn hoàn tất */
+.success-icon { font-size: 54px; text-align: center; }
+.center { text-align: center; }
+.small { font-size: 12px; color: #9fc7ab; }
+.done-name { color: #64c686; font-weight: 700; }
+
+/* Dots tiến trình */
+.nw-dots { display: flex; gap: 7px; justify-content: center; margin: 18px 0 0; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.22); }
+.dot.active { background: #64c686; }
+
+/* Spinner (checkin.js chèn <span class="spinner">) */
+.spinner {
+  border: 3px solid rgba(255,255,255,0.25); border-top-color: #64c686;
+  border-radius: 50%; width: 20px; height: 20px; display: inline-block;
+  vertical-align: middle; animation: nwspin 0.9s linear infinite; margin-right: 6px;
+}
+@keyframes nwspin { to { transform: rotate(360deg); } }
+
+.hidden { display: none !important; }
+
+.nw-foot { text-align: center; margin-top: 18px; }
+
+@media (min-width: 760px) {
+  .nw-bgm { opacity: 0.5; }
+}
