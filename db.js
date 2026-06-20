@@ -60,17 +60,24 @@ const CHECKINS_BODY = `(
 
 db.exec(`CREATE TABLE IF NOT EXISTS checkins ${CHECKINS_BODY};`);
 
-// Migration: nếu DB cũ còn ràng buộc UNIQUE trên employee_id -> rebuild bỏ UNIQUE
-const t = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='checkins'").get();
-if (t && /employee_id\s+INTEGER\s+UNIQUE/i.test(t.sql)) {
-  const cols = db.prepare('PRAGMA table_info(checkins)').all().map((c) => c.name).join(', ');
-  db.transaction(() => {
-    db.exec(`CREATE TABLE checkins_new ${CHECKINS_BODY};`);
-    db.exec(`INSERT INTO checkins_new (${cols}) SELECT ${cols} FROM checkins;`);
-    db.exec('DROP TABLE checkins;');
-    db.exec('ALTER TABLE checkins_new RENAME TO checkins;');
-  })();
-  console.log('🔁 Đã nâng cấp bảng checkins: cho phép check-in nhiều lần.');
+// Migration: nếu DB cũ còn ràng buộc UNIQUE trên employee_id -> rebuild bỏ UNIQUE.
+// Bọc try/catch để migration lỗi KHÔNG làm app crash (web vẫn lên).
+try {
+  const t = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='checkins'").get();
+  if (t && /employee_id\s+INTEGER\s+UNIQUE/i.test(t.sql)) {
+    db.pragma('foreign_keys = OFF');
+    const cols = db.prepare('PRAGMA table_info(checkins)').all().map((c) => c.name).join(', ');
+    db.exec('DROP TABLE IF EXISTS checkins_new;');
+    db.transaction(() => {
+      db.exec(`CREATE TABLE checkins_new ${CHECKINS_BODY};`);
+      db.exec(`INSERT INTO checkins_new (${cols}) SELECT ${cols} FROM checkins;`);
+      db.exec('DROP TABLE checkins;');
+      db.exec('ALTER TABLE checkins_new RENAME TO checkins;');
+    })();
+    console.log('🔁 Đã nâng cấp bảng checkins: cho phép check-in nhiều lần.');
+  }
+} catch (e) {
+  console.error('⚠️ Bỏ qua migration checkins (app vẫn chạy):', e.message);
 }
 
 db.exec('CREATE INDEX IF NOT EXISTS idx_checkins_valid ON checkins(is_valid);');
