@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Quản trị check-in</title>
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<div class="admin-wrap">
+  <!-- Login -->
+  <div class="card" id="login" style="max-width:380px;margin:60px auto">
+    <p class="step-title">🔐 Đăng nhập quản trị</p>
+    <label>Mật khẩu</label>
+    <input id="pw" type="password" placeholder="Mật khẩu admin" />
+    <button class="btn" id="btn-login">Đăng nhập</button>
+    <div class="msg" id="login-msg"></div>
+  </div>
+
+  <!-- Dashboard -->
+  <div id="dash" class="hidden">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+      <h2 style="margin:0">📊 Quản trị check-in</h2>
+      <div class="toolbar" style="margin:0">
+        <a class="btn" style="width:auto;margin:0;padding:10px 16px;text-decoration:none;display:inline-block" href="/draw.html">🎰 Trang quay số</a>
+        <button class="btn secondary" style="width:auto;margin:0;padding:10px 16px" id="btn-refresh">↻ Làm mới</button>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><div class="num" id="s-emp">0</div><div class="lbl">Nhân viên</div></div>
+      <div class="stat"><div class="num" id="s-checkin">0</div><div class="lbl">Đã check-in</div></div>
+      <div class="stat"><div class="num" id="s-valid">0</div><div class="lbl">Hợp lệ (quay số)</div></div>
+      <div class="stat"><div class="num" id="s-winner">0</div><div class="lbl">Đã trúng</div></div>
+    </div>
+
+    <div class="toolbar">
+      <input type="text" id="search" placeholder="🔍 Tìm theo tên / phòng ban / 4 số cuối..." />
+      <button class="btn" id="btn-export">⬇ Xuất CSV</button>
+      <label class="btn secondary" style="width:auto;margin:0;padding:10px 16px;cursor:pointer">
+        ⬆ Import nhân viên (CSV)
+        <input type="file" id="import-file" accept=".csv,text/csv" class="hidden" />
+      </label>
+    </div>
+    <div class="msg" id="import-msg"></div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>#</th><th>Ảnh</th><th>Họ tên</th><th>Phòng ban</th><th>CCCD</th>
+          <th>Thời gian</th><th>GPS</th><th>IP</th><th>Thiết bị</th><th>Hợp lệ</th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="modal-img" id="modal"><img id="modal-img-el" alt="" /></div>
+<script src="/admin.js"></script>
+</body>
+</html>

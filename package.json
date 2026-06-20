@@ -1,0 +1,17 @@
+{
+  "name": "event-checkin",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Web check-in sự kiện công ty: QR -> nhập CCCD (đối chiếu nhân viên) -> chụp ảnh backdrop -> lưu time/GPS/IP/device -> lucky draw",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "import": "node scripts/import-employees.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.10.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2"
+  }
+}

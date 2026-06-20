@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Check-in sự kiện</title>
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <div style="font-size:30px">🎉</div>
+    <h1 id="eventName">Sự kiện công ty</h1>
+    <p>Check-in tham gia quay số may mắn</p>
+  </div>
+
+  <div class="steps-dots">
+    <div class="dot active" data-dot="0"></div>
+    <div class="dot" data-dot="1"></div>
+    <div class="dot" data-dot="2"></div>
+  </div>
+
+  <!-- Bước 1: CCCD + đồng ý -->
+  <div class="card" id="step-cccd">
+    <p class="step-title">Bước 1 · Xác minh nhân viên</p>
+    <p class="step-sub">Nhập số CCCD/CMND của bạn để đối chiếu danh sách.</p>
+    <label>Số CCCD / CMND</label>
+    <input id="cccd" type="tel" inputmode="numeric" placeholder="VD: 0790xxxxxxxx" autocomplete="off" />
+    <label class="consent">
+      <input id="consent" type="checkbox" />
+      <span>Tôi đồng ý cho Ban tổ chức thu thập ảnh, thời gian, vị trí (GPS) và thông tin thiết bị phục vụ check-in và quay số may mắn.</span>
+    </label>
+    <button class="btn" id="btn-verify">Tiếp tục</button>
+    <div class="msg" id="msg-cccd"></div>
+  </div>
+
+  <!-- Bước 2: Chụp ảnh -->
+  <div class="card hidden" id="step-photo">
+    <p class="step-title">Bước 2 · Chụp ảnh tại backdrop</p>
+    <p class="step-sub hello" id="hello"></p>
+    <video id="video" autoplay playsinline muted></video>
+    <img id="preview" class="hidden" alt="ảnh" />
+    <canvas id="canvas" class="hidden"></canvas>
+    <button class="btn" id="btn-capture">📸 Chụp ảnh</button>
+    <button class="btn secondary hidden" id="btn-retake">Chụp lại</button>
+    <button class="btn ghost" id="btn-switch">🔄 Đổi camera trước/sau</button>
+    <div class="msg" id="msg-photo"></div>
+  </div>
+
+  <!-- Bước 3: Gửi -->
+  <div class="card hidden" id="step-submit">
+    <p class="step-title">Bước 3 · Hoàn tất check-in</p>
+    <p class="step-sub">Đang lấy vị trí GPS và gửi thông tin...</p>
+    <img id="preview2" class="hidden" alt="ảnh" style="border-radius:14px;margin-bottom:12px" />
+    <div class="msg info show" id="gps-status"><span class="spinner"></span> Đang lấy vị trí GPS...</div>
+    <button class="btn" id="btn-submit" disabled>Gửi check-in</button>
+    <div class="msg" id="msg-submit"></div>
+  </div>
+
+  <!-- Thành công -->
+  <div class="card hidden" id="step-done">
+    <div class="success-icon" id="done-icon">✅</div>
+    <p class="step-title center" id="done-title">Check-in thành công!</p>
+    <p class="step-sub center" id="done-msg"></p>
+    <div class="center" style="margin-top:10px">
+      <span class="small">Vui lòng giữ màn hình này để BTC đối chiếu khi cần.</span>
+    </div>
+  </div>
+
+  <p class="center small" style="margin-top:20px">Mỗi nhân viên chỉ check-in 1 lần · Dữ liệu chỉ dùng cho sự kiện</p>
+</div>
+<script src="/checkin.js"></script>
+</body>
+</html>
