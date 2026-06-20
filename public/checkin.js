@@ -113,6 +113,9 @@ $('btn-switch').addEventListener('click', () => {
 $('btn-capture').addEventListener('click', () => {
   const video = $('video');
   if (!video.videoWidth) return;
+  // QUAN TRỌNG: xin GPS NGAY trong cú chạm này (user gesture). iOS 12.2+ chỉ hiện
+  // popup quyền vị trí khi được kích hoạt bởi gesture — gọi trong setTimeout sẽ bị bỏ qua.
+  if (!state.gpsAsked) { state.gpsAsked = true; getGps(); }
   const maxW = 1080;
   const scale = Math.min(1, maxW / video.videoWidth);
   const w = Math.round(video.videoWidth * scale);
@@ -128,13 +131,12 @@ $('btn-capture').addEventListener('click', () => {
   $('btn-capture').classList.add('hidden');
   $('btn-switch').classList.add('hidden');
   $('btn-retake').classList.remove('hidden');
-  // tự chuyển sang bước gửi sau 600ms
+  // tự chuyển sang bước gửi sau 600ms (GPS đã được xin ở trên, trong gesture)
   setTimeout(() => {
     $('preview2').src = state.photoDataUrl;
     $('preview2').classList.remove('hidden');
     setDot(2);
     goStep('step-submit');
-    getGps();
   }, 700);
 });
 
@@ -171,22 +173,20 @@ function getGps() {
     },
     (err) => {
       const inApp = isInAppBrowser();
-      if (optional) {
-        // Không bắt buộc: thông báo nhẹ, không cần thử lại gì
-        showMsg($('gps-status'), 'info', 'Bỏ qua vị trí cũng được — bạn cứ bấm <b>"Gửi check-in"</b>.');
-        $('btn-submit').disabled = false;
-        return;
+      let reason = '';
+      if (err.code === 1) { // PERMISSION_DENIED
+        reason = inApp
+          ? 'Trình duyệt trong Zalo/Facebook chặn vị trí — hãy <b>mở bằng Safari</b> (••• → Mở bằng Safari).'
+          : 'Quyền vị trí bị tắt. Bật lại: <b>Cài đặt → Quyền riêng tư & Bảo mật → Dịch vụ định vị → Safari → "Khi dùng app"</b>; hoặc trên thanh địa chỉ bấm <b>"ᴀA" → Cài đặt trang → Vị trí → Cho phép</b>, rồi bấm "Thử lấy lại vị trí".';
+      } else if (err.code === 3) { // TIMEOUT
+        reason = 'Lấy vị trí quá lâu (sóng yếu). Bấm "Thử lấy lại vị trí".';
+      } else { // POSITION_UNAVAILABLE
+        reason = 'Không xác định được vị trí lúc này. Bấm "Thử lấy lại vị trí".';
       }
-      let msg = 'Không lấy được GPS. ';
-      if (err.code === 1) {
-        msg += inApp
-          ? 'Trình duyệt trong Zalo/Facebook chặn vị trí — hãy <b>mở bằng Safari</b> (••• → Mở bằng Safari). '
-          : 'Hãy vào Cài đặt bật <b>Vị trí/Location</b> cho trình duyệt rồi thử lại. ';
-      } else {
-        msg += '(' + err.message + ') ';
-      }
-      msg += '<br>👉 Bạn vẫn có thể bấm <b>"Gửi check-in"</b> bên dưới.';
-      showMsg($('gps-status'), 'err', msg);
+      const tail = optional
+        ? '<br>👉 GPS không bắt buộc — bạn <b>cứ bấm "Gửi check-in"</b> là xong.'
+        : '<br>👉 Bạn vẫn có thể bấm <b>"Gửi check-in"</b> bên dưới.';
+      showMsg($('gps-status'), optional ? 'info' : 'err', reason + tail);
       $('btn-gps-retry').classList.remove('hidden');
       $('btn-submit').disabled = false;
     },
