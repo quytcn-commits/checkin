@@ -31,6 +31,10 @@ fetch('/api/config').then((r) => r.json()).then((c) => {
   $('eventName').textContent = c.eventName;
   document.title = 'Check-in · ' + c.eventName;
   state.geofenceEnabled = c.geofenceEnabled;
+  if (!c.checkinOpen) {
+    showMsg($('msg-cccd'), 'info', '⏰ ' + (c.checkinMessage || 'Hiện chưa mở check-in.'));
+    $('btn-verify').disabled = true;
+  }
 }).catch(() => {});
 
 // ---------- Bước 1: xác minh CCCD ----------

@@ -2,6 +2,7 @@
 const $ = (id) => document.getElementById(id);
 let PW = localStorage.getItem('admin_pw') || '';
 let ALL = [];
+let VIEW = 'table';
 
 function authHeaders() { return { 'x-admin-password': PW, 'Content-Type': 'application/json' }; }
 
@@ -30,6 +31,7 @@ function showDash() {
   $('login').classList.add('hidden');
   $('dash').classList.remove('hidden');
   loadAll();
+  loadSettings();
 }
 
 async function loadAll() {
@@ -45,22 +47,31 @@ async function loadAll() {
   render();
 }
 
-function render() {
+function filtered() {
   const q = $('search').value.trim().toLowerCase();
-  const tbody = $('tbody');
-  const rows = ALL.filter((r) =>
+  return ALL.filter((r) =>
     !q || (r.name || '').toLowerCase().includes(q) ||
     (r.department || '').toLowerCase().includes(q) ||
     (r.cccd_last4 || '').includes(q)
   );
-  tbody.innerHTML = rows.map((r) => {
+}
+
+function render() {
+  if (VIEW === 'table') renderTable(); else renderGallery();
+}
+
+function gpsCell(r) {
+  if (r.lat == null) return '—';
+  return `<a href="https://maps.google.com/?q=${r.lat},${r.lng}" target="_blank" style="color:var(--accent2)">${r.gps_valid ? '✅' : '📍'} bản đồ</a><br><span class="small">±${Math.round(r.gps_accuracy || 0)}m</span>`;
+}
+
+function renderTable() {
+  const rows = filtered();
+  $('tbody').innerHTML = rows.map((r) => {
     let dev = '';
     try { const d = JSON.parse(r.device_info || '{}'); dev = (d.platform || '') + ' · ' + (d.screen || ''); } catch (e) {}
     const photo = r.photo_path
       ? `<img class="thumb" src="/uploads/${r.photo_path}" data-full="/uploads/${r.photo_path}" />`
-      : '—';
-    const gps = r.lat != null
-      ? `<a href="https://maps.google.com/?q=${r.lat},${r.lng}" target="_blank" style="color:var(--accent2)">${r.gps_valid ? '✅' : '📍'} bản đồ</a><br><span class="small">±${Math.round(r.gps_accuracy || 0)}m</span>`
       : '—';
     return `<tr>
       <td>${r.id}</td>
@@ -69,7 +80,7 @@ function render() {
       <td>${r.department || ''}</td>
       <td>****${r.cccd_last4 || ''}</td>
       <td>${(r.checkin_time || '').replace('T', ' ')}</td>
-      <td>${gps}</td>
+      <td>${gpsCell(r)}</td>
       <td class="small">${r.ip || ''}</td>
       <td class="small">${dev}</td>
       <td><span class="pill ${r.is_valid ? 'ok' : 'no'}">${r.is_valid ? 'Hợp lệ' : 'Không'}</span></td>
@@ -77,32 +88,110 @@ function render() {
   }).join('');
 }
 
+function renderGallery() {
+  const rows = filtered();
+  $('gallery-view').innerHTML = rows.map((r) => `
+    <div class="gcard">
+      <div class="gph">${r.photo_path ? `<img class="thumb" src="/uploads/${r.photo_path}" data-full="/uploads/${r.photo_path}" />` : '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;font-size:12px">Không ảnh</div>'}</div>
+      <div class="gmeta">
+        <div class="gnm">#${r.id} · ${r.name || ''} <span class="pill ${r.is_valid ? 'ok' : 'no'}" style="font-size:10px">${r.is_valid ? 'OK' : 'X'}</span></div>
+        <div class="gln">${r.department || ''}</div>
+        <div class="gln">${(r.checkin_time || '').replace('T', ' ')}</div>
+        <div class="gln">${r.lat != null ? (r.gps_valid ? '📍 trong vùng' : '⚠️ ngoài vùng') : 'GPS —'}</div>
+      </div>
+    </div>`).join('');
+}
+
 $('search').addEventListener('input', render);
 $('btn-refresh').addEventListener('click', loadAll);
 
+// Chuyển chế độ xem
+function setView(v) {
+  VIEW = v;
+  $('view-table').classList.toggle('active', v === 'table');
+  $('view-gallery').classList.toggle('active', v === 'gallery');
+  $('table-view').classList.toggle('hidden', v !== 'table');
+  $('gallery-view').classList.toggle('hidden', v !== 'gallery');
+  render();
+}
+$('view-table').addEventListener('click', () => setView('table'));
+$('view-gallery').addEventListener('click', () => setView('gallery'));
+
+// Xuất CSV + Báo cáo ảnh
 $('btn-export').addEventListener('click', () => {
   window.location = '/api/admin/export?pw=' + encodeURIComponent(PW);
 });
-
-$('import-file').addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  const text = await file.text();
-  $('import-msg').className = 'msg show info';
-  $('import-msg').textContent = 'Đang import...';
-  const res = await fetch('/api/admin/import-employees', {
-    method: 'POST', headers: authHeaders(), body: JSON.stringify({ csv: text }),
-  });
-  const data = await res.json();
-  if (!res.ok) { $('import-msg').className = 'msg show err'; $('import-msg').textContent = data.error || 'Lỗi import'; return; }
-  $('import-msg').className = 'msg show ok';
-  $('import-msg').innerHTML = `Đã import: <b>${data.added}</b> · Bỏ qua: ${data.skipped} · Tổng nhân viên: <b>${data.total}</b>` +
-    (data.errors && data.errors.length ? '<br><span class="small">' + data.errors.join('; ') + '</span>' : '');
-  e.target.value = '';
-  loadAll();
+$('btn-report').addEventListener('click', () => {
+  window.open('/api/admin/report?pw=' + encodeURIComponent(PW), '_blank');
 });
 
-// Import Excel (.xlsx) - đọc file thành base64 gửi server
+// ===== Cài đặt =====
+$('btn-settings').addEventListener('click', () => {
+  $('settings-panel').classList.toggle('hidden');
+});
+
+function msToLocalInput(ms) {
+  if (!ms) return '';
+  const d = new Date(ms);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+async function loadSettings() {
+  const s = await fetch('/api/admin/settings', { headers: authHeaders() }).then((r) => r.json());
+  $('gf-enabled').checked = !!s.geofence.enabled;
+  $('gf-lat').value = s.geofence.lat ?? '';
+  $('gf-lng').value = s.geofence.lng ?? '';
+  $('gf-radius').value = s.geofence.radius ?? '';
+  $('wd-enabled').checked = !!s.window.enabled;
+  $('wd-start').value = msToLocalInput(s.window.start);
+  $('wd-end').value = msToLocalInput(s.window.end);
+  $('server-time').textContent = 'Giờ máy chủ hiện tại: ' + new Date(s.serverNow).toLocaleString('vi-VN');
+}
+
+$('btn-here').addEventListener('click', () => {
+  if (!navigator.geolocation) { $('gf-here-msg').textContent = 'Thiết bị không hỗ trợ GPS.'; return; }
+  $('gf-here-msg').textContent = 'Đang lấy vị trí...';
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      $('gf-lat').value = pos.coords.latitude.toFixed(6);
+      $('gf-lng').value = pos.coords.longitude.toFixed(6);
+      $('gf-here-msg').textContent = `Đã lấy vị trí (sai số ~${Math.round(pos.coords.accuracy)}m). Nhớ bấm Lưu.`;
+    },
+    (err) => { $('gf-here-msg').textContent = 'Không lấy được GPS: ' + err.message; },
+    { enableHighAccuracy: true, timeout: 12000 }
+  );
+});
+
+$('btn-save-settings').addEventListener('click', async () => {
+  const startV = $('wd-start').value;
+  const endV = $('wd-end').value;
+  const body = {
+    geofence: {
+      enabled: $('gf-enabled').checked,
+      lat: parseFloat($('gf-lat').value) || 0,
+      lng: parseFloat($('gf-lng').value) || 0,
+      radius: parseFloat($('gf-radius').value) || 0,
+    },
+    window: {
+      enabled: $('wd-enabled').checked,
+      start: startV ? new Date(startV).getTime() : 0,
+      end: endV ? new Date(endV).getTime() : 0,
+    },
+  };
+  if (body.window.enabled && body.window.start && body.window.end && body.window.end <= body.window.start) {
+    $('settings-msg').className = 'msg show err';
+    $('settings-msg').textContent = 'Giờ kết thúc phải sau giờ bắt đầu.';
+    return;
+  }
+  const res = await fetch('/api/admin/settings', { method: 'POST', headers: authHeaders(), body: JSON.stringify(body) });
+  if (!res.ok) { $('settings-msg').className = 'msg show err'; $('settings-msg').textContent = 'Lưu thất bại.'; return; }
+  $('settings-msg').className = 'msg show ok';
+  $('settings-msg').textContent = '✅ Đã lưu cài đặt (áp dụng ngay, không cần restart).';
+  loadSettings();
+});
+
+// ===== Import Excel =====
 $('import-xlsx').addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (!file) return;
@@ -126,6 +215,25 @@ $('import-xlsx').addEventListener('change', async (e) => {
   }
   $('import-msg').className = 'msg show ok';
   $('import-msg').innerHTML = `Đã import <b>${data.added}</b> nhân viên từ sheet "<b>${data.sheet}</b>" · Bỏ qua nghỉ việc: ${data.skippedInactive} · CCCD lỗi: ${data.skippedInvalid} · Tổng: <b>${data.total}</b>`;
+  e.target.value = '';
+  loadAll();
+});
+
+// ===== Import CSV =====
+$('import-file').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const text = await file.text();
+  $('import-msg').className = 'msg show info';
+  $('import-msg').textContent = 'Đang import...';
+  const res = await fetch('/api/admin/import-employees', {
+    method: 'POST', headers: authHeaders(), body: JSON.stringify({ csv: text }),
+  });
+  const data = await res.json();
+  if (!res.ok) { $('import-msg').className = 'msg show err'; $('import-msg').textContent = data.error || 'Lỗi import'; return; }
+  $('import-msg').className = 'msg show ok';
+  $('import-msg').innerHTML = `Đã import: <b>${data.added}</b> · Bỏ qua: ${data.skipped} · Tổng nhân viên: <b>${data.total}</b>` +
+    (data.errors && data.errors.length ? '<br><span class="small">' + data.errors.join('; ') + '</span>' : '');
   e.target.value = '';
   loadAll();
 });

@@ -35,13 +35,13 @@ function distanceMeters(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-function isWithinGeofence(lat, lng) {
-  if (!config.geofence.enabled) return { applicable: false, ok: true, distance: null };
+function isWithinGeofence(lat, lng, geofence = config.geofence) {
+  if (!geofence.enabled) return { applicable: false, ok: true, distance: null };
   if (typeof lat !== 'number' || typeof lng !== 'number' || Number.isNaN(lat) || Number.isNaN(lng)) {
     return { applicable: true, ok: false, distance: null };
   }
-  const d = distanceMeters(config.geofence.lat, config.geofence.lng, lat, lng);
-  return { applicable: true, ok: d <= config.geofence.radius, distance: Math.round(d) };
+  const d = distanceMeters(geofence.lat, geofence.lng, lat, lng);
+  return { applicable: true, ok: d <= geofence.radius, distance: Math.round(d) };
 }
 
 // Parser CSV tối giản: hỗ trợ dấu phẩy, có thể bọc "..."

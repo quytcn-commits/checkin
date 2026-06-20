@@ -51,6 +51,11 @@ CREATE TABLE IF NOT EXISTS draw_winners (
 );
 
 CREATE INDEX IF NOT EXISTS idx_checkins_valid ON checkins(is_valid);
+
+CREATE TABLE IF NOT EXISTS settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT
+);
 `);
 
 module.exports = { db, DATA_DIR, UPLOAD_DIR };

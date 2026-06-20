@@ -6,6 +6,7 @@ const XLSX = require('xlsx');
 const config = require('./config');
 const { db, UPLOAD_DIR } = require('./db');
 const lib = require('./lib');
+const settings = require('./settings');
 const { parseEmployeesExcel, DEFAULT_SHEET } = require('./lib-excel');
 
 const app = express();
@@ -41,11 +42,36 @@ function savePhoto(dataUrl, checkinId) {
 
 // Config tối thiểu cho frontend
 app.get('/api/config', (req, res) => {
-  res.json({ eventName: config.eventName, geofenceEnabled: config.geofence.enabled });
+  const eff = settings.effective();
+  const ws = settings.windowStatus(Date.now());
+  res.json({
+    eventName: config.eventName,
+    geofenceEnabled: eff.geofence.enabled,
+    checkinOpen: ws.open,
+    windowState: ws.state,
+    windowStart: ws.start || null,
+    windowEnd: ws.end || null,
+    checkinMessage: ws.open ? '' : checkinClosedMessage(ws),
+  });
 });
+
+// Thông báo khi ngoài khung giờ check-in
+function checkinClosedMessage(ws) {
+  if (ws.state === 'before') {
+    const t = new Date(ws.start).toLocaleString('vi-VN');
+    return `Chưa đến giờ check-in. Bắt đầu lúc ${t}.`;
+  }
+  if (ws.state === 'after') {
+    const t = new Date(ws.end).toLocaleString('vi-VN');
+    return `Đã hết giờ check-in (kết thúc lúc ${t}).`;
+  }
+  return 'Hiện chưa mở check-in.';
+}
 
 // Kiểm tra CCCD trước khi chụp ảnh (UX: chào tên + chặn sớm)
 app.post('/api/verify', (req, res) => {
+  const ws = settings.windowStatus(Date.now());
+  if (!ws.open) return res.status(403).json({ ok: false, error: checkinClosedMessage(ws) });
   const cccd = lib.normalizeCccd(req.body.cccd);
   if (!lib.isValidCccd(cccd)) {
     return res.status(400).json({ ok: false, error: 'Số CCCD/CMND không hợp lệ (cần 9 hoặc 12 số)' });
@@ -64,6 +90,9 @@ app.post('/api/verify', (req, res) => {
 // Gửi check-in
 app.post('/api/checkin', (req, res) => {
   try {
+    const ws = settings.windowStatus(Date.now());
+    if (!ws.open) return res.status(403).json({ ok: false, error: checkinClosedMessage(ws) });
+
     const cccd = lib.normalizeCccd(req.body.cccd);
     const { photo, lat, lng, accuracy, consent, deviceInfo } = req.body;
 
@@ -87,7 +116,7 @@ app.post('/api/checkin', (req, res) => {
 
     const latN = typeof lat === 'number' ? lat : null;
     const lngN = typeof lng === 'number' ? lng : null;
-    const geo = lib.isWithinGeofence(latN, lngN);
+    const geo = lib.isWithinGeofence(latN, lngN, settings.effective().geofence);
     const gpsValid = geo.ok ? 1 : 0;
 
     // is_valid: có consent + có ảnh + đúng nhân viên + (qua geofence nếu bật)
@@ -164,6 +193,28 @@ app.get('/api/admin/stats', requireAdmin, (req, res) => {
   res.json({ totalEmp, totalCheckin, validCheckin, winners });
 });
 
+// Cài đặt geofence + khung giờ (đọc)
+app.get('/api/admin/settings', requireAdmin, (req, res) => {
+  res.json({ ...settings.effective(), serverNow: Date.now() });
+});
+
+// Cài đặt geofence + khung giờ (ghi)
+app.post('/api/admin/settings', requireAdmin, (req, res) => {
+  const b = req.body || {};
+  if (b.geofence) {
+    settings.set('geofence_enabled', b.geofence.enabled ? 'true' : 'false');
+    if (b.geofence.lat != null) settings.set('geofence_lat', b.geofence.lat);
+    if (b.geofence.lng != null) settings.set('geofence_lng', b.geofence.lng);
+    if (b.geofence.radius != null) settings.set('geofence_radius', b.geofence.radius);
+  }
+  if (b.window) {
+    settings.set('window_enabled', b.window.enabled ? 'true' : 'false');
+    settings.set('window_start_ms', b.window.start || 0);
+    settings.set('window_end_ms', b.window.end || 0);
+  }
+  res.json({ ...settings.effective(), serverNow: Date.now() });
+});
+
 app.get('/api/admin/checkins', requireAdmin, (req, res) => {
   const rows = db.prepare(`
     SELECT id, name, department, cccd_last4, photo_path, checkin_time,
@@ -173,19 +224,73 @@ app.get('/api/admin/checkins', requireAdmin, (req, res) => {
   res.json(rows);
 });
 
-// Export CSV
+// Export CSV (kèm cột link ảnh)
 app.get('/api/admin/export', requireAdmin, (req, res) => {
   const rows = db.prepare(`
     SELECT id, name, department, cccd_last4, checkin_time, lat, lng, gps_accuracy,
-           gps_valid, ip, is_valid FROM checkins ORDER BY id
+           gps_valid, ip, is_valid, photo_path FROM checkins ORDER BY id
   `).all();
-  const header = ['id', 'name', 'department', 'cccd_last4', 'checkin_time', 'lat', 'lng', 'gps_accuracy', 'gps_valid', 'ip', 'is_valid'];
+  const base = `${req.protocol}://${req.get('host')}`;
+  const header = ['id', 'name', 'department', 'cccd_last4', 'checkin_time', 'lat', 'lng', 'gps_accuracy', 'gps_valid', 'ip', 'is_valid', 'photo_url'];
   const esc = (v) => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
   const lines = [header.join(',')];
-  for (const r of rows) lines.push(header.map((h) => esc(r[h])).join(','));
+  for (const r of rows) {
+    r.photo_url = r.photo_path ? `${base}/uploads/${r.photo_path}` : '';
+    lines.push(header.map((h) => esc(r[h])).join(','));
+  }
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', 'attachment; filename="checkins.csv"');
   res.send('﻿' + lines.join('\n'));
+});
+
+// Báo cáo HTML kèm ảnh (mở để xem/in PDF). Cho phép mật khẩu qua query.
+app.get('/api/admin/report', requireAdmin, (req, res) => {
+  const onlyValid = req.query.valid === '1';
+  const rows = db.prepare(`
+    SELECT id, name, department, cccd_last4, photo_path, checkin_time,
+           lat, lng, gps_accuracy, gps_valid, ip, is_valid
+    FROM checkins ${onlyValid ? 'WHERE is_valid = 1' : ''} ORDER BY id
+  `).all();
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const cards = rows.map((r) => `
+    <div class="c">
+      <div class="ph">${r.photo_path ? `<img src="/uploads/${r.photo_path}" loading="lazy">` : '<div class="noph">Không ảnh</div>'}</div>
+      <div class="meta">
+        <div class="nm">#${r.id} · ${esc(r.name)}</div>
+        <div class="dp">${esc(r.department || '')}</div>
+        <div class="ln">CCCD: ****${esc(r.cccd_last4 || '')}</div>
+        <div class="ln">${esc((r.checkin_time || '').replace('T', ' '))}</div>
+        <div class="ln">${r.lat != null ? `GPS: ${r.lat.toFixed(5)}, ${r.lng.toFixed(5)} ${r.gps_valid ? '✅' : '⚠️'} (±${Math.round(r.gps_accuracy || 0)}m)` : 'GPS: —'}</div>
+        <div class="ln">IP: ${esc(r.ip || '')}</div>
+        <div class="bd ${r.is_valid ? 'ok' : 'no'}">${r.is_valid ? 'HỢP LỆ' : 'KHÔNG HỢP LỆ'}</div>
+      </div>
+    </div>`).join('');
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(`<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8">
+<title>Báo cáo check-in · ${esc(config.eventName)}</title>
+<style>
+body{font-family:system-ui,Segoe UI,Roboto,sans-serif;margin:0;padding:20px;background:#f3f4f8;color:#111}
+h1{font-size:20px;margin:0 0 4px}.sub{color:#666;font-size:13px;margin-bottom:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
+.c{background:#fff;border:1px solid #e3e6ef;border-radius:12px;overflow:hidden;break-inside:avoid}
+.ph{aspect-ratio:3/4;background:#000}.ph img{width:100%;height:100%;object-fit:cover;display:block}
+.noph{display:flex;align-items:center;justify-content:center;height:100%;color:#888;font-size:13px}
+.meta{padding:10px 12px}.nm{font-weight:700;font-size:14px}.dp{color:#555;font-size:12px;margin:2px 0 6px}
+.ln{font-size:11.5px;color:#444;margin:2px 0}
+.bd{display:inline-block;margin-top:6px;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700}
+.bd.ok{background:#dcfce7;color:#15803d}.bd.no{background:#fee2e2;color:#b91c1c}
+.bar{margin-bottom:14px}.bar button,.bar a{font:inherit;padding:8px 14px;border-radius:8px;border:1px solid #cbd2e1;background:#fff;cursor:pointer;text-decoration:none;color:#111}
+@media print{.bar{display:none}body{background:#fff}}
+</style></head><body>
+<h1>Báo cáo check-in — ${esc(config.eventName)}</h1>
+<div class="sub">Tổng: ${rows.length} bản ghi${onlyValid ? ' (chỉ hợp lệ)' : ''} · Xuất lúc ${esc(new Date().toLocaleString('vi-VN'))}</div>
+<div class="bar">
+  <button onclick="window.print()">🖨️ In / Lưu PDF</button>
+  <a href="/api/admin/report?pw=${esc(req.query.pw || '')}">Tất cả</a>
+  <a href="/api/admin/report?valid=1&pw=${esc(req.query.pw || '')}">Chỉ hợp lệ</a>
+</div>
+<div class="grid">${cards}</div>
+</body></html>`);
 });
 
 // Import danh sách nhân viên từ Excel (.xlsx) - mặc định sheet "Chốt"

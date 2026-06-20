@@ -5,6 +5,29 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Quản trị check-in</title>
 <link rel="stylesheet" href="/style.css" />
+<style>
+  .panel { background: var(--card); border-radius: 14px; padding: 18px; margin: 12px 0; }
+  .panel h3 { margin: 0 0 12px; font-size: 16px; }
+  .set-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .set-grid .full { grid-column: 1 / -1; }
+  .fld { display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; }
+  .fld label { color: var(--muted); font-size: 12px; }
+  .fld input { width: 100%; padding: 11px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,.12); background: #11152e; color: var(--text); font-size: 14px; font-family: inherit; }
+  .switch { display: flex; align-items: center; gap: 8px; font-size: 14px; margin-bottom: 8px; }
+  .switch input { width: 18px; height: 18px; }
+  .set-note { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .seg { display: inline-flex; border: 1px solid rgba(255,255,255,.18); border-radius: 10px; overflow: hidden; }
+  .seg button { background: transparent; color: var(--muted); border: none; padding: 9px 16px; font-size: 14px; cursor: pointer; font-family: inherit; }
+  .seg button.active { background: var(--accent); color: #1a1200; font-weight: 700; }
+  .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+  .gcard { background: var(--card); border-radius: 12px; overflow: hidden; }
+  .gcard .gph { aspect-ratio: 3/4; background: #000; cursor: pointer; }
+  .gcard .gph img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .gcard .gmeta { padding: 8px 10px; }
+  .gcard .gnm { font-weight: 700; font-size: 13px; }
+  .gcard .gln { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  @media (max-width: 640px) { .set-grid { grid-template-columns: 1fr; } }
+</style>
 </head>
 <body>
 <div class="admin-wrap">
@@ -34,22 +57,57 @@
       <div class="stat"><div class="num" id="s-winner">0</div><div class="lbl">Đã trúng</div></div>
     </div>
 
+    <!-- Panel cài đặt -->
+    <div class="panel hidden" id="settings-panel">
+      <h3>⚙️ Cài đặt check-in</h3>
+      <div class="set-grid">
+        <!-- Geofence -->
+        <div>
+          <label class="switch"><input type="checkbox" id="gf-enabled" /> <b>Giới hạn vị trí (GPS / geofence)</b></label>
+          <div class="set-note" style="margin-bottom:10px">Bật = chỉ người check-in trong bán kính mới được tính hợp lệ (vào quay số).</div>
+          <div class="fld"><label>Vĩ độ (latitude)</label><input type="text" id="gf-lat" placeholder="VD: 10.762622" /></div>
+          <div class="fld"><label>Kinh độ (longitude)</label><input type="text" id="gf-lng" placeholder="VD: 106.660172" /></div>
+          <div class="fld"><label>Bán kính cho phép (mét)</label><input type="number" id="gf-radius" placeholder="VD: 300" /></div>
+          <button class="btn secondary" style="margin:0;padding:10px 14px" id="btn-here">📍 Lấy vị trí hiện tại của tôi</button>
+          <div class="set-note" id="gf-here-msg"></div>
+        </div>
+        <!-- Khung giờ -->
+        <div>
+          <label class="switch"><input type="checkbox" id="wd-enabled" /> <b>Giới hạn khung giờ check-in</b></label>
+          <div class="set-note" style="margin-bottom:10px">Bật = chỉ cho check-in trong khoảng thời gian này.</div>
+          <div class="fld"><label>Bắt đầu</label><input type="datetime-local" id="wd-start" /></div>
+          <div class="fld"><label>Kết thúc</label><input type="datetime-local" id="wd-end" /></div>
+          <div class="set-note" id="server-time"></div>
+        </div>
+      </div>
+      <button class="btn" style="width:auto;margin-top:12px;padding:11px 22px" id="btn-save-settings">💾 Lưu cài đặt</button>
+      <div class="msg" id="settings-msg"></div>
+    </div>
+
+    <!-- Thanh công cụ -->
     <div class="toolbar">
       <input type="text" id="search" placeholder="🔍 Tìm theo tên / phòng ban / 4 số cuối..." />
-      <button class="btn" id="btn-export">⬇ Xuất CSV</button>
+      <div class="seg">
+        <button id="view-table" class="active">📋 Bảng</button>
+        <button id="view-gallery">🖼️ Ảnh</button>
+      </div>
+      <button class="btn secondary" id="btn-settings" style="padding:10px 16px">⚙️ Cài đặt</button>
+      <button class="btn" id="btn-export">⬇ CSV</button>
+      <button class="btn" id="btn-report">🖼️ Báo cáo ảnh</button>
       <label class="btn" style="width:auto;margin:0;padding:10px 16px;cursor:pointer">
-        ⬆ Import Excel (.xlsx)
+        ⬆ Excel
         <input type="file" id="import-xlsx" accept=".xlsx,.xls" class="hidden" />
       </label>
-      <input type="text" id="sheet-name" placeholder='Sheet (mặc định "Chốt")' style="width:auto;flex:0 0 180px" />
+      <input type="text" id="sheet-name" placeholder='Sheet ("Chốt")' style="width:auto;flex:0 0 140px" />
       <label class="btn secondary" style="width:auto;margin:0;padding:10px 16px;cursor:pointer">
-        ⬆ Import CSV
+        ⬆ CSV
         <input type="file" id="import-file" accept=".csv,text/csv" class="hidden" />
       </label>
     </div>
     <div class="msg" id="import-msg"></div>
 
-    <div class="table-wrap">
+    <!-- Bảng -->
+    <div class="table-wrap" id="table-view">
       <table>
         <thead><tr>
           <th>#</th><th>Ảnh</th><th>Họ tên</th><th>Phòng ban</th><th>CCCD</th>
@@ -58,6 +116,9 @@
         <tbody id="tbody"></tbody>
       </table>
     </div>
+
+    <!-- Gallery review ảnh -->
+    <div class="gallery hidden" id="gallery-view"></div>
   </div>
 </div>
 
