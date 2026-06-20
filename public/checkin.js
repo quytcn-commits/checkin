@@ -104,6 +104,8 @@ async function startCamera() {
       audio: false,
     });
     $('video').srcObject = state.stream;
+    // Camera trước (selfie): soi gương cho tự nhiên, dễ canh; camera sau giữ nguyên
+    $('video').style.transform = state.facing === 'user' ? 'scaleX(-1)' : 'none';
     $('video').classList.remove('hidden');
     $('preview').classList.add('hidden');
     $('btn-start-gps').classList.add('hidden');
@@ -150,7 +152,10 @@ $('btn-capture').addEventListener('click', () => {
   const h = Math.round(video.videoHeight * scale);
   const canvas = $('canvas');
   canvas.width = w; canvas.height = h;
-  canvas.getContext('2d').drawImage(video, 0, 0, w, h);
+  const ctx = canvas.getContext('2d');
+  // Camera trước: lật ngang khi chụp để ảnh khớp với những gì người dùng thấy (đã soi gương)
+  if (state.facing === 'user') { ctx.translate(w, 0); ctx.scale(-1, 1); }
+  ctx.drawImage(video, 0, 0, w, h);
   state.photoDataUrl = canvas.toDataURL('image/jpeg', 0.75);
   $('preview').src = state.photoDataUrl;
   $('preview').classList.remove('hidden');
