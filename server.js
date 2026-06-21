@@ -51,7 +51,7 @@ app.get('/api/config', (req, res) => {
       mode: 'events',
       geofenceEnabled: open.some((e) => e.geofence_enabled), // GPS cần khi có sự kiện mở yêu cầu vị trí
       checkinOpen: open.length > 0,
-      openEvents: open.map((e) => e.name),
+      openEvents: open.map((e) => ({ id: e.id, name: e.name, geofence: !!e.geofence_enabled })),
       checkinMessage: open.length ? '' : 'Hiện chưa đến giờ check-in của địa điểm nào. Vui lòng quay lại đúng khung giờ sự kiện.',
     });
   } else {
@@ -131,22 +131,28 @@ app.post('/api/checkin', (req, res) => {
     const latN = typeof lat === 'number' ? lat : null;
     const lngN = typeof lng === 'number' ? lng : null;
 
-    // Xác định sự kiện/địa điểm theo giờ + GPS
+    // Xác định sự kiện/địa điểm. Ưu tiên địa điểm người dùng tự chọn (eventId).
+    const reqEventId = req.body.eventId ? parseInt(req.body.eventId, 10) : null;
     let eventId = null, eventName = null, geofenceApplicable = false, distance = null, gpsValid = 0;
-    const match = events.matchForCheckin(now, latN, lngN);
-    if (match.mode === 'global') {
+    if (events.hasEvents()) {
+      let ev = null;
+      if (reqEventId) {
+        ev = db.prepare('SELECT * FROM events WHERE id = ? AND active = 1').get(reqEventId);
+        if (!ev) return res.status(400).json({ ok: false, error: 'Địa điểm/sự kiện không hợp lệ' });
+        if (!events.timeOk(ev, now)) return res.status(403).json({ ok: false, error: `Ngoài khung giờ check-in của "${ev.name}".` });
+      } else {
+        const match = events.matchForCheckin(now, latN, lngN);
+        if (!match.event) return res.status(403).json({ ok: false, error: 'Hiện ngoài khung giờ check-in của các địa điểm.' });
+        ev = match.event;
+      }
+      const ee = events.evalEvent(ev, latN, lngN);
+      eventId = ev.id; eventName = ev.name;
+      geofenceApplicable = ee.geofenceApplicable; distance = ee.distance; gpsValid = ee.gpsOk ? 1 : 0;
+    } else {
       const ws = settings.windowStatus(now);
       if (!ws.open) return res.status(403).json({ ok: false, error: checkinClosedMessage(ws) });
       const geo = lib.isWithinGeofence(latN, lngN, settings.effective().geofence);
       geofenceApplicable = geo.applicable; distance = geo.distance; gpsValid = geo.ok ? 1 : 0;
-    } else {
-      if (!match.event) {
-        return res.status(403).json({ ok: false, error: 'Hiện ngoài khung giờ check-in của các địa điểm.' });
-      }
-      eventId = match.event.id; eventName = match.event.name;
-      geofenceApplicable = !!match.event.geofence_enabled;
-      distance = match.distance != null ? match.distance : null;
-      gpsValid = match.gpsOk ? 1 : 0;
     }
     const isValid = consent && (!geofenceApplicable || gpsValid) ? 1 : 0;
 

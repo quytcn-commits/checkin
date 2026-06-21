@@ -11,6 +11,9 @@ const state = {
   stream: null,
   geofenceEnabled: false,
   gpsAsked: false,
+  mode: 'global',
+  openEvents: [],
+  eventId: null,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -48,6 +51,8 @@ $('ios-banner-x').addEventListener('click', () => $('ios-banner').classList.add(
 fetch('/api/config').then((r) => r.json()).then((c) => {
   $('eventName').textContent = c.eventName;
   document.title = 'Check-in · ' + c.eventName;
+  state.mode = c.mode || 'global';
+  state.openEvents = c.openEvents || [];
   state.geofenceEnabled = !!c.geofenceEnabled;
   if (!c.checkinOpen) {
     showMsg($('msg-cccd'), 'info', '⏰ ' + (c.checkinMessage || 'Hiện chưa mở check-in.'));
@@ -80,13 +85,15 @@ $('btn-verify').addEventListener('click', async () => {
     $('hello').innerHTML = `Xin chào <b>${data.name}</b>${data.department ? ' · ' + data.department : ''}. Hãy đứng trước backdrop và chụp ảnh nhé!`;
     setDot(1);
     goStep('step-photo');
-    if (state.geofenceEnabled && (typeof state.lat !== 'number' || typeof state.lng !== 'number')) {
-      $('btn-start-gps').classList.remove('hidden');
-      $('btn-capture').classList.add('hidden');
-      $('btn-switch').classList.add('hidden');
-      showMsg($('msg-photo'), 'info', 'Bấm "Bật vị trí GPS" và chọn Cho phép để tiếp tục chụp ảnh.');
+    // Nhiều địa điểm cùng mở -> cho nhân viên tự chọn; ngược lại đi thẳng
+    if (state.mode === 'events' && state.openEvents.length > 1) {
+      showEventPicker();
     } else {
-      startCamera();
+      if (state.mode === 'events' && state.openEvents.length === 1) {
+        state.eventId = state.openEvents[0].id;
+        state.geofenceEnabled = !!state.openEvents[0].geofence;
+      }
+      startPhotoFlow();
     }
   } catch (e) {
     showMsg($('msg-cccd'), 'err', 'Lỗi kết nối, thử lại.');
@@ -94,6 +101,43 @@ $('btn-verify').addEventListener('click', async () => {
     btn.disabled = false; btn.textContent = 'Tiếp tục';
   }
 });
+
+// Hiện nút chọn địa điểm khi nhiều sự kiện cùng khung giờ
+function showEventPicker() {
+  $('btn-start-gps').classList.add('hidden');
+  $('btn-capture').classList.add('hidden');
+  $('btn-switch').classList.add('hidden');
+  $('video').classList.add('hidden');
+  hideMsg($('msg-photo'));
+  const box = $('event-buttons');
+  box.innerHTML = '';
+  state.openEvents.forEach((ev) => {
+    const b = document.createElement('button');
+    b.className = 'nw-btn secondary';
+    b.style.marginTop = '8px';
+    b.textContent = '📍 ' + ev.name;
+    b.addEventListener('click', () => {
+      state.eventId = ev.id;
+      state.geofenceEnabled = !!ev.geofence;
+      $('event-picker').classList.add('hidden');
+      startPhotoFlow();
+    });
+    box.appendChild(b);
+  });
+  $('event-picker').classList.remove('hidden');
+}
+
+// Bắt đầu luồng chụp ảnh: cần GPS trước (geofence) hay mở camera luôn
+function startPhotoFlow() {
+  if (state.geofenceEnabled && (typeof state.lat !== 'number' || typeof state.lng !== 'number')) {
+    $('btn-start-gps').classList.remove('hidden');
+    $('btn-capture').classList.add('hidden');
+    $('btn-switch').classList.add('hidden');
+    showMsg($('msg-photo'), 'info', 'Bấm "Bật vị trí GPS" và chọn Cho phép để tiếp tục chụp ảnh.');
+  } else {
+    startCamera();
+  }
+}
 
 // ---------- Bước 2: camera ----------
 async function startCamera() {
@@ -277,7 +321,7 @@ $('btn-submit').addEventListener('click', async () => {
       body: JSON.stringify({
         cccd: state.cccd, photo: state.photoDataUrl,
         lat: state.lat, lng: state.lng, accuracy: state.accuracy,
-        consent: true, deviceInfo,
+        consent: true, deviceInfo, eventId: state.eventId,
       }),
     });
     const data = await res.json();

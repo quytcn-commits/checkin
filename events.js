@@ -47,4 +47,16 @@ function matchForCheckin(now, lat, lng) {
   return { mode: 'events', event: e, gpsOk: false, distance };
 }
 
-module.exports = { activeEvents, openEvents, hasEvents, timeOk, matchForCheckin };
+// Đánh giá geofence cho 1 sự kiện cụ thể (khi nhân viên tự chọn địa điểm)
+function evalEvent(ev, lat, lng) {
+  const geofenceApplicable = !!ev.geofence_enabled;
+  let gpsOk = !geofenceApplicable;
+  let distance = null;
+  if (geofenceApplicable && lat != null && lng != null) {
+    distance = Math.round(lib.distanceMeters(ev.lat, ev.lng, lat, lng));
+    gpsOk = distance <= ev.radius;
+  }
+  return { geofenceApplicable, gpsOk, distance };
+}
+
+module.exports = { activeEvents, openEvents, hasEvents, timeOk, matchForCheckin, evalEvent };
